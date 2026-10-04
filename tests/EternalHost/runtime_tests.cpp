@@ -2,6 +2,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -109,14 +110,75 @@ int main(int argc,char**) {
         test("loader exception cannot escape Host boundary",[]{auto loader=std::make_unique<FakeLoader>();loader->throw_open=true;Host h(std::move(loader));std::string e;require(!h.load(candidates(),e)&&!e.empty(),"Loader exception escaped or passed");});
         test("service namespace and declared dependencies prevent provider spoof",[]{auto h=host();std::string e;require(h.load(candidates(),e)&&h.enable(e),e.c_str());auto r=reference();auto req=request("core.status");require(f[1].context.query_service(f[1].context.instance,&req,&r)==EM_CONFLICT,"Undeclared provider accessed");require(h.disable(e),e.c_str());f[1].service=EM_CORE_SERVICE_ID;require(!h.enable(e)&&h.snapshot().service_count==0,"Core provider spoof accepted");});
         test("synchronous event mutation and payload limits",[]{depend(1,0);f[0].subscribe=true;f[1].subscribe=true;f[0].self_unsubscribe=true;auto h=host();std::string e;require(h.load(candidates(),e)&&h.enable(e),e.c_str());require(h.publishEvent(event())==EM_OK&&h.publishEvent(event())==EM_OK,"Event dispatch failed");require(f[0].events==1&&f[1].events==2,"Unsubscribe mutation unsafe");auto huge=event();huge.data_size=65537;require(h.publishEvent(huge)==EM_INVALID_ARGUMENT,"Payload limit not enforced");});
-        test("event recursion budget and bound module thread",[]{f[0].subscribe=true;f[0].loop=true;auto h=host();std::string e;require(h.load(candidates(),e)&&h.enable(e),e.c_str());require(h.publishEvent(event())==EM_OK&&f[0].events==8,"Recursion budget failed");EmStatus result=EM_OK;std::thread worker([&]{result=f[0].context.log(f[0].context.instance,EM_LOG_INFO,view("worker"));});worker.join();require(result==EM_WRONG_THREAD,"Foreign thread accepted");});
+        test("event recursion budget and bound module thread including unsubscribe",[]{f[0].subscribe=true;f[0].loop=true;auto h=host();std::string e;require(h.load(candidates(),e)&&h.enable(e),e.c_str());require(h.publishEvent(event())==EM_OK&&f[0].events==8,"Recursion budget failed");EmStatus result=EM_OK,removed=EM_OK;std::thread worker([&]{result=f[0].context.log(f[0].context.instance,EM_LOG_INFO,view("worker"));removed=f[0].context.unsubscribe(f[0].context.instance,f[0].token);});worker.join();require(result==EM_WRONG_THREAD&&removed==EM_WRONG_THREAD&&h.snapshot().subscription_count==1,"Foreign thread accepted or removed subscription");require(f[0].context.unsubscribe(f[0].context.instance,f[0].token)==EM_OK&&h.snapshot().subscription_count==0,"Owner thread cannot unsubscribe");});
         test("event callback cannot disable or unload its active DLL stack",[]{f[0].subscribe=true;auto h=host();std::string e;require(h.load(candidates(),e)&&h.enable(e),e.c_str());lifecycle_probe=&h;require(h.publishEvent(event())==EM_OK,"Event failed");lifecycle_probe=nullptr;require(shutdown_rejected&&disable_rejected&&h.snapshot().enabled&&f[0].closes==0,"Active callback image could unload");require(h.shutdown(e),e.c_str());});
         test("quarantine retains provider closure and prevents unload",[]{depend(1,0);f[1].disable_result=EM_INTERNAL_ERROR;auto h=host();std::string e;require(h.load(candidates(),e)&&h.enable(e),e.c_str());require(!h.disable(e)&&h.snapshot().quarantined,"Disable failure not quarantined");require(h.snapshot().service_count==0&&f[0].quarantines==1&&f[1].quarantines==1,"Provider closure not retained/revoked");require(!h.shutdown(e)&&f[0].unloads==0&&f[1].unloads==0&&f[0].closes==0&&f[1].closes==0,"Unsafe FreeLibrary after failure");});
         test("optional invalid ABI does not unload healthy Core",[]{f[1].descriptor.abi_major=2;auto c=candidates();c[0].required=false;auto h=host();std::string e;require(h.load(c,e)&&h.enable(e),e.c_str());require(f[0].loads==1&&f[0].enables==1&&f[0].closes==0&&f[1].loads==0,"Optional ABI failure harmed Core");require(h.snapshot().modules[0].state==ModuleState::Failed,"Rejected module not diagnosed");});
         test("optional failed Load and Enable reject only affected branch",[]{depend(1,0);f[1].load_result=EM_INTERNAL_ERROR;auto c=candidates();c[0].required=false;auto h=host();std::string e;require(h.load(c,e)&&h.enable(e)&&f[0].closes==0&&f[1].unloads==1,"Optional Load failure harmed Core");require(h.shutdown(e),e.c_str());reset();depend(1,0);f[1].enable_result=EM_INTERNAL_ERROR;auto h2=host();require(h2.load(c,e)&&h2.enable(e)&&f[0].closes==0&&f[1].unloads==1,"Optional Enable failure harmed Core");});
         test("optional cycles and consumers reject without Core failure",[]{depend(1,2);depend(2,1);auto c=candidates(true);c[0].required=false;auto h=host();std::string e;require(h.load(c,e)&&h.enable(e)&&f[0].enables==1&&f[1].loads==0&&f[2].loads==0,"Optional cycle harmed Core");});
+        test("one explicit startup-to-server-thread handoff preserves callback affinity",[]{
+            depend(1,0);f[0].subscribe=true;auto h=host();std::string e;require(h.load(candidates(),e),e.c_str());
+            std::promise<void> ready,finish;auto ready_wait=ready.get_future();auto finish_wait=finish.get_future();
+            bool initial_wrong{},bound{},duplicate_rejected{},enabled{},callback_ok{},query_ok{},event_ok{},stopped{};
+            std::thread server([&]{std::string error;initial_wrong=!h.enable(error)&&error=="Wrong Host thread";
+                bound=h.bindFirstEnableThread(error);duplicate_rejected=!h.bindFirstEnableThread(error);enabled=h.enable(error);
+                callback_ok=f[0].context.log(f[0].context.instance,EM_LOG_INFO,view("server"))==EM_OK;
+                auto r=reference();query_ok=h.queryService(request("core.status"),r)==EM_OK;event_ok=h.publishEvent(event())==EM_OK;
+                ready.set_value();finish_wait.wait();stopped=h.disable(error)&&h.enable(error)&&h.shutdown(error);
+            });
+            ready_wait.wait();const auto old_callback=f[0].context.log(f[0].context.instance,EM_LOG_INFO,view("startup"));
+            auto r=reference();const auto old_query=h.queryService(request("core.status"),r);
+            const bool running_rebind_rejected=!h.bindFirstEnableThread(e);const bool old_enable_rejected=!h.enable(e);
+            finish.set_value();server.join();
+            require(initial_wrong&&bound&&duplicate_rejected&&enabled&&callback_ok&&query_ok&&event_ok&&stopped,"Explicit lifecycle thread handoff failed");
+            require(old_callback==EM_WRONG_THREAD&&old_query==EM_WRONG_THREAD&&running_rebind_rejected&&old_enable_rejected,"Running Host rebound or old thread retained authority");
+            require(f[0].closes==1&&f[1].closes==1,"Handoff teardown failed");
+        });
+        test("thread handoff rejects unloaded, failed-Enable and disabled Hosts",[]{
+            auto h=host();std::string e;require(!h.bindFirstEnableThread(e),"Unloaded Host rebound");
+            require(h.load(candidates(),e),e.c_str());f[1].enable_result=EM_INTERNAL_ERROR;require(!h.enable(e)&&h.snapshot().service_count==0,"Fixture Enable did not fail cleanly");
+            bool rejected{};std::thread foreign([&]{std::string error;rejected=!h.bindFirstEnableThread(error);});foreign.join();
+            require(rejected,"Failed Enable reopened thread handoff");f[1].enable_result=EM_OK;require(h.enable(e)&&h.disable(e),e.c_str());
+            require(!h.bindFirstEnableThread(e),"Disabled Host rebound after its first Enable");require(h.shutdown(e),e.c_str());
+        });
+#ifdef _WIN32
+        test("terminal stop refuses a live server thread and ordinary Disable cannot migrate",[]{
+            depend(1,0);auto h=host();std::string e;require(h.load(candidates(),e),e.c_str());
+            std::promise<void> ready,finish;auto ready_wait=ready.get_future();auto finish_wait=finish.get_future();bool enabled{},callback_ok{};
+            std::thread server([&]{std::string error;enabled=h.bindFirstEnableThread(error)&&h.enable(error);ready.set_value();finish_wait.wait();
+                callback_ok=h.onBoundThread()&&f[0].context.log(f[0].context.instance,EM_LOG_INFO,view("still server"))==EM_OK;
+            });
+            ready_wait.wait();const bool live_rejected=!h.finishStopAfterServerThreadExit(e)&&e=="Server thread exit is not confirmed";
+            const bool ordinary_rejected=!h.disable(e)&&e=="Wrong Host thread";const bool affinity_unchanged=!h.onBoundThread();
+            finish.set_value();server.join();require(enabled&&live_rejected&&ordinary_rejected&&affinity_unchanged&&callback_ok,"Live thread migration was allowed");
+            require(h.finishStopAfterServerThreadExit(e),e.c_str());
+        });
+        test("joined server thread permits one permanent reverse Disable and Unload",[]{
+            depend(1,0);f[0].subscribe=true;auto h=host();std::string e;require(h.load(candidates(),e),e.c_str());bool enabled{};
+            std::thread server([&]{std::string error;enabled=h.bindFirstEnableThread(error)&&h.enable(error);});server.join();
+            require(enabled&&h.finishStopAfterServerThreadExit(e),e.c_str());const auto stopped=h.snapshot();
+            require(h.onBoundThread()&&!stopped.loaded&&!stopped.enabled&&stopped.service_count==0&&stopped.subscription_count==0,"Final stop retained active registrations");
+            require(f[0].disables==1&&f[1].disables==1&&f[0].unloads==1&&f[1].unloads==1&&f[0].closes==1&&f[1].closes==1,"Terminal cleanup incomplete");
+            require(trace[4]=="disable:addon"&&trace[5]=="disable:core"&&trace[6]=="unload:addon"&&trace[7]=="unload:core","Final cleanup order unsafe");
+            require(!h.enable(e)&&!h.load(candidates(),e)&&!h.bindFirstEnableThread(e),"Terminal Host reopened");
+            require(h.finishStopAfterServerThreadExit(e)&&h.shutdown(e)&&f[0].closes==1,"Repeated terminal stop was not idempotent");
+        });
+        test("terminal stop without OS proof refuses and failing cleanup quarantines providers",[]{
+            auto unbound=host();std::string e;require(unbound.load(candidates(),e)&&!unbound.finishStopAfterServerThreadExit(e),"Missing thread proof accepted");require(unbound.shutdown(e),e.c_str());
+            reset();depend(1,0);f[1].disable_result=EM_INTERNAL_ERROR;auto h=host();require(h.load(candidates(),e),e.c_str());bool enabled{};
+            std::thread server([&]{std::string error;enabled=h.bindFirstEnableThread(error)&&h.enable(error);});server.join();
+            require(enabled&&!h.finishStopAfterServerThreadExit(e)&&h.snapshot().quarantined,"Unsafe terminal teardown claimed success");
+            require(f[0].quarantines==1&&f[1].quarantines==1&&f[0].unloads==0&&f[1].unloads==0&&f[0].closes==0&&f[1].closes==0,"Quarantined image/provider was freed");
+            require(!h.enable(e)&&!h.finishStopAfterServerThreadExit(e),"Quarantined terminal Host reopened");
+        });
+#endif
         for(auto id:{"core","addon","extra"})std::filesystem::remove(folder/(std::string(id)+".dll"));
         std::filesystem::remove(folder);
-        std::cout<<"PASS: 18 Host runtime behavior groups (mock modules; no BDS claim)\n";return 0;
+#ifdef _WIN32
+        std::cout<<"PASS: 23 Host runtime behavior groups (mock modules; no BDS claim)\n";
+#else
+        std::cout<<"PASS: 20 Host runtime behavior groups (mock modules; terminal handoff unsupported; no BDS claim)\n";
+#endif
+        return 0;
     }catch(const std::exception& e){std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}
 }

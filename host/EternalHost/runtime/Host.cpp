@@ -109,14 +109,20 @@ struct Host::Impl {
     std::unique_ptr<LibraryLoader> loader;
     LogSink logger;
     std::thread::id thread{std::this_thread::get_id()};
+    void* enable_thread_handle{};
     std::vector<std::unique_ptr<Node>> nodes;
     std::vector<Node*> order;
     std::unordered_map<std::string,Service> services;
     std::unordered_map<uint64_t,Subscription> subscriptions;
     uint64_t serial{0};
     uint32_t event_depth{0}, dispatch_count{0};
-    bool loaded{},enabled{},quarantined{},busy{};
+    bool loaded{},enabled{},quarantined{},busy{},enable_attempted{},thread_handoff{},final_stop{};
     explicit Impl(std::unique_ptr<LibraryLoader> l,LogSink log):loader(l?std::move(l):std::make_unique<PlatformLoader>()),logger(std::move(log)){}
+    ~Impl() {
+#ifdef _WIN32
+        if(enable_thread_handle)CloseHandle(static_cast<HANDLE>(enable_thread_handle));
+#endif
+    }
     bool onThread()const noexcept { return thread==std::this_thread::get_id(); }
     bool callable(const Node& n)const { return n.phase==Phase::Loaded || n.phase==Phase::Enabling || n.phase==Phase::Enabled; }
     static Node* caller(void* p) { return static_cast<Node*>(p); }
@@ -273,7 +279,7 @@ bool Host::discover(const std::filesystem::path& base,const std::vector<ModuleCo
     }catch(const std::exception& e){error=e.what();return false;}
 }
 bool Host::load(const std::vector<Candidate>& candidates,std::string& error) {
-    auto& h=*impl_;if(!h.onThread()){error="Wrong Host thread";return false;}if(h.loaded||h.busy||h.event_depth||h.quarantined){error="Host already loaded, dispatching, busy or quarantined";return false;}
+    auto& h=*impl_;if(!h.onThread()){error="Wrong Host thread";return false;}if(h.loaded||h.busy||h.event_depth||h.quarantined||h.final_stop){error="Host already loaded, dispatching, busy, quarantined or finally stopped";return false;}
     h.busy=true;struct Busy { bool& b;~Busy(){b=false;} } busy{h.busy};
     h.nodes.clear();h.order.clear();
     try {if(candidates.empty()||candidates.size()>64)throw std::runtime_error("Module count must be 1..64");
@@ -326,8 +332,40 @@ bool Host::load(const std::vector<Candidate>& candidates,std::string& error) {
     std::string cleanup;h.unloadAll(cleanup);if(!cleanup.empty())error+="; "+cleanup;
     for(auto& n:h.nodes)if(n->library && n->phase!=Impl::Phase::Quarantined)n->library.reset();return false;
 }
+bool Host::bindFirstEnableThread(std::string& error) {
+    auto& h=*impl_;
+    if(!h.loaded||h.quarantined||h.enabled||h.busy||h.event_depth||h.enable_attempted||h.thread_handoff||h.final_stop||!h.services.empty()||!h.subscriptions.empty()) {
+        error="Host thread handoff requires a quiescent Load before the first Enable attempt";return false;
+    }
+#ifdef _WIN32
+    HANDLE thread_handle{};
+    if(!DuplicateHandle(GetCurrentProcess(),GetCurrentThread(),GetCurrentProcess(),&thread_handle,SYNCHRONIZE,FALSE,0)) {
+        error="Cannot retain server thread synchronization handle: "+std::to_string(GetLastError());return false;
+    }
+    h.enable_thread_handle=thread_handle;
+#endif
+    h.thread=std::this_thread::get_id();h.thread_handoff=true;return true;
+}
+bool Host::onBoundThread() const noexcept { return impl_->onThread(); }
+bool Host::finishStopAfterServerThreadExit(std::string& error) {
+    auto& h=*impl_;
+#ifdef _WIN32
+    // Verify the retained OS handle before reading mutable lifecycle state.
+    // A stop request or an empty event queue does not prove owner-thread exit.
+    if(!h.enable_thread_handle||WaitForSingleObject(static_cast<HANDLE>(h.enable_thread_handle),0)!=WAIT_OBJECT_0) {
+        error="Server thread exit is not confirmed";return false;
+    }
+#else
+    error="Terminal thread handoff requires a Windows synchronization handle";return false;
+#endif
+    if(h.final_stop) { if(!h.onThread()){error="Wrong Host terminal thread";return false;}return !h.quarantined; }
+    if(!h.loaded||h.busy||h.event_depth||h.quarantined) { error="Host cannot complete terminal stop while unloaded, busy, dispatching or quarantined";return false; }
+    h.thread=std::this_thread::get_id();h.final_stop=true;return shutdown(error);
+}
 bool Host::enable(std::string& error) {
     auto& h=*impl_;if(!h.onThread()){error="Wrong Host thread";return false;}if(h.busy||h.event_depth){error="Host lifecycle busy or dispatching";return false;}if(h.enabled)return true;if(!h.loaded||h.quarantined){error="Host not loaded or quarantined";return false;}
+    if(h.final_stop){error="Host has finally stopped";return false;}
+    h.enable_attempted=true;
     h.busy=true;struct Busy { bool& b;~Busy(){b=false;} } busy{h.busy};
     for(auto* n:h.order){if(n->phase==Impl::Phase::Unloaded)continue;std::string failure;
         for(const auto& dep:n->dependencies)if(!dep.optional){auto provider=std::find_if(h.order.begin(),h.order.end(),[&](auto* p){return p->report.id==dep.id;});if(provider==h.order.end()||(*provider)->phase!=Impl::Phase::Enabled){failure="dependency Enable failed: "+dep.id;break;}}

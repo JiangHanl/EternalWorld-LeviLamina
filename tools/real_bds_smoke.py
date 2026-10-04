@@ -48,6 +48,7 @@ class Server:
         return self.expect(expected)
 
     def stop(self):
+        start = len(self.lines)
         if self.process.poll() is None:
             self.process.stdin.write("stop\n")
             self.process.stdin.flush()
@@ -60,6 +61,14 @@ class Server:
         self.reader.join(timeout=2)
         if self.process.returncode != 0:
             raise RuntimeError(f"BDS exit code {self.process.returncode}")
+        shutdown = self.lines[start:]
+        if any(" ERR [Eternal]" in line or "Wrong Host thread" in line for line in shutdown):
+            raise RuntimeError("Host shutdown logged an error despite process exit 0")
+        cleanup = next((line for line in shutdown if "EternalHost stop cleanup PASS" in line), None)
+        if cleanup is None:
+            raise RuntimeError("Host terminal module cleanup was not confirmed")
+        self.evidence.append(cleanup.strip())
+        print("PASS Host terminal module cleanup", flush=True)
         print("PASS graceful stop exit 0", flush=True)
 
 
@@ -75,6 +84,7 @@ def main():
     if sorted(p.name for p in (server / "plugins").iterdir() if p.is_dir()) != ["Eternal", "LeviLamina"]:
         raise RuntimeError("Expected only Eternal and LeviLamina runtime directories")
     args.output.mkdir(parents=True, exist_ok=True)
+    (args.output / "result.json").write_text(json.dumps({"result": "RUNNING"}) + "\n", encoding="utf-8")
     evidence = []
     for iteration in (1, 2):
         instance = Server(server, evidence)

@@ -37,5 +37,46 @@
       "url": "https://codeload.github.com/xmake-io/xmake-repo/zip/ae88fa69ee5a39961bf5411d4162d1cbcefd5e0f",
       "sha256": "0027ba0372b7c50167b6e682189ec246611a7852012ac1142546956ec39e98bf"
     }
-  ]
+  ],
+  "recipe_patches": [
+    {
+      "repository": "levimc",
+      "path": "packages/l/libhat/xmake.lua",
+      "original_sha256": "3f7c1545114bce18e61068c1bcc188298984ee990bd45dff7e431b993da2a7c3",
+      "patched_sha256": "78766628ed5b65b500267c4a94387596ea5b045cccdb24f0ce758ff5ba2590ea",
+      "replacements": [
+        {
+          "find": "set_urls(\"https://github.com/BasedInc/libhat.git\")",
+          "replace": "set_urls(\"https://codeload.github.com/BasedInc/libhat/zip/7375873e560f46e8569c6a389c6077f4c7133089\", {filename = \"libhat-0.4.0.zip\"})"
+        },
+        {
+          "find": "add_versions(\"0.4.0\", \"7375873e560f46e8569c6a389c6077f4c7133089\")",
+          "replace": "add_versions(\"0.4.0\", \"f5bb87e07d86fe164d527f24e0680b3006b6cbbf7ce0919c72491945ce2aad98\")"
+        }
+      ]
+    },
+    {
+      "repository": "levimc",
+      "path": "packages/l/levilamina/xmake.lua",
+      "original_sha256": "9bf3d50e84753d6a13b95806ec4bcea4f2ccc4ca3976bccfda2d2b1a511eb9d9",
+      "patched_sha256": "813d3f9242ff10feee7e81943ad64f17c66a523b8ef67947be75f2b5bd3a2ef8",
+      "replacements": [
+        {
+          "find": "import(\"package.tools.xmake\").install(package)",
+          "replace": "import(\"package.tools.xmake\").install(package, {\"--levimc_repo=\" .. path.absolute(\"../../..\", package:scriptdir())})"
+        },
+        {
+          "find": "import(\"package.tools.xmake\").install(package, {\"--target_type=client\"})",
+          "replace": "import(\"package.tools.xmake\").install(package, {\"--target_type=client\", \"--levimc_repo=\" .. path.absolute(\"../../..\", package:scriptdir())})"
+        }
+      ]
+    }
+  ],
+  "libhat_archive": {
+    "version": "0.4.0",
+    "commit": "7375873e560f46e8569c6a389c6077f4c7133089",
+    "url": "https://codeload.github.com/BasedInc/libhat/zip/7375873e560f46e8569c6a389c6077f4c7133089",
+    "file": "libhat-7375873e560f46e8569c6a389c6077f4c7133089.zip",
+    "sha256": "f5bb87e07d86fe164d527f24e0680b3006b6cbbf7ce0919c72491945ce2aad98"
+  }
 }

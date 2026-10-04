@@ -1,0 +1,115 @@
+{
+  "date": "2026-10-04",
+  "phase": "1.5",
+  "scope": "host_internal_module_runtime_regression",
+  "result": "PASS",
+  "bdsVersion": "1.26.51.1",
+  "leviLaminaVersion": "26.51.6",
+  "apiVersion": "1.0 draft",
+  "abiVersion": "1.0 draft",
+  "runtimePluginDirectories": [
+    "LeviLamina",
+    "Eternal"
+  ],
+  "nativeMod": "EternalHost",
+  "internalModules": 8,
+  "businessModulesImplemented": 0,
+  "assetFeatureBits": 0,
+  "products": [
+    {
+      "target": "EternalCore",
+      "path": "modules/EternalCore.dll",
+      "sha256": "f31b4e33f0b719770ecc95cc7623ade5bf5b24cf5ef604ed04a900ea6625e0e8"
+    },
+    {
+      "target": "EternalCommerce",
+      "path": "modules/EternalCommerce.dll",
+      "sha256": "5fcc78ff9d6caaf6d3ab0f7b5a0472c3e56a39f26814a2f74c2c3cb07abfe502"
+    },
+    {
+      "target": "EternalLife",
+      "path": "modules/EternalLife.dll",
+      "sha256": "002a3cf516cda7875962def8d4b25a436aacc173b9a2ba036503660fa9c5b8d3"
+    },
+    {
+      "target": "EternalWorld",
+      "path": "modules/EternalWorld.dll",
+      "sha256": "ba33a77a331f42108f64ef2537b80ebfec23aab84138c87b73b9c6367f977f8a"
+    },
+    {
+      "target": "EternalContent",
+      "path": "modules/EternalContent.dll",
+      "sha256": "c9e68f217e3affb819dc69ede7c8a9c8bd61566fa779f13f82097c5f23e6cf9d"
+    },
+    {
+      "target": "EternalManagement",
+      "path": "modules/EternalManagement.dll",
+      "sha256": "966574d2951440ed5ec74e3a0b49bdc9d4b0922c497f5435b310857405231eb3"
+    },
+    {
+      "target": "EternalPresentation",
+      "path": "modules/EternalPresentation.dll",
+      "sha256": "417ff4fb4383bdec23e6ec7ca091b9cb1543cca0d0e8dddda14d040dcf8305f7"
+    },
+    {
+      "target": "EternalEncounters",
+      "path": "modules/EternalEncounters.dll",
+      "sha256": "6919a2e2f70fe6e3d10832d2ad7022b99c7227e1f1696b0d0cdb46d547f8ca23"
+    },
+    {
+      "target": "EternalHost",
+      "path": "EternalHost.dll",
+      "sha256": "4a4bef31d753fb07918b4d0fee4e7a4ea6475cb3e14d012e0844e4e6ccade9db"
+    }
+  ],
+  "buildMode": "Portable Host rebuild; eight internal DLLs preserved from unchanged module baseline",
+  "realBdsChecks": {
+    "load": "PASS",
+    "enable": "PASS",
+    "coreService": "PASS",
+    "selfcheck": "PASS",
+    "llList": "There are 1 mods: Eternal",
+    "disable": "PASS",
+    "reenable": "PASS",
+    "selfcheckAfterReenable": "PASS",
+    "fullRestart": "PASS",
+    "gracefulStopExitCodes": [
+      0,
+      0
+    ],
+    "runs": 2,
+    "playersConnected": false,
+    "serverStopped": true,
+    "terminalModuleCleanup": "PASS; OS thread exit confirmed, internal modules disabled and unloaded in both runs"
+  },
+  "independentChecks": {
+    "coreDomainGroups": 17,
+    "hostRuntimeGroups": 23,
+    "consoleSuites": 7,
+    "coreAndModuleSdkC11AndCpp20": "PASS",
+    "actualModuleDllContractsAndLifecycle": "PASS",
+    "syntheticIdentityFixtures": true
+  },
+  "earlierFailures": [
+    {
+      "cause": "Manifest incorrectly treated the LeviLamina loader as a plugin dependency",
+      "resolution": "Match official native template platform and omit loader self-dependency"
+    },
+    {
+      "cause": "LeviLamina Load and Enable execute on different startup/server threads",
+      "resolution": "Explicit one-time quiescent thread handoff before first Enable; subsequent thread guards preserved"
+    },
+    {
+      "cause": "LeviLamina stop Disable executes off the server thread before leaveGameSync returns",
+      "resolution": "Defer terminal cleanup until the retained OS server-thread handle is signaled, then disable/unload permanently; smoke asserts cleanup and checks stop errors"
+    }
+  ],
+  "cloudBuild": "PENDING; tracked independently",
+  "limitations": [
+    "No real player or client gameplay acceptance",
+    "Business module skeletons are PLANNED and disabled",
+    "Asset service methods remain unsupported",
+    "Local portable build and cloud build binaries have independent hashes",
+    "Raw runtime logs and private Phase 1 Git ancestry are not published"
+  ]
+}

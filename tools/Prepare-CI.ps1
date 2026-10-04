@@ -36,6 +36,23 @@ foreach ($repository in $lock.repositories) {
         Expand-Archive -LiteralPath $archive -DestinationPath $directory -Force
     }
 }
+# Preserve the upstream build recipe while fixing its transport and nested-repo pin.
+# Both original and resulting recipe bytes are locked, so an upstream change refuses.
+foreach ($patch in $lock.recipe_patches) {
+    $repository = @($lock.repositories | Where-Object name -eq $patch.repository)
+    if ($repository.Count -ne 1) { throw "Recipe patch repository is not locked: $($patch.repository)" }
+    $recipe = Join-Path $dependencyRoot ('ci-repositories/'+$patch.repository+'/xmake-repo-'+$repository[0].commit+'/'+$patch.path)
+    $actual = (Get-FileHash -LiteralPath $recipe -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -eq $patch.patched_sha256) { continue }
+    if ($actual -ne $patch.original_sha256) { throw "Official recipe hash mismatch: $($patch.path)" }
+    $text = [IO.File]::ReadAllText($recipe)
+    foreach ($replacement in $patch.replacements) {
+        if (-not $text.Contains($replacement.find)) { throw "Recipe patch anchor missing: $($patch.path)" }
+        $text = $text.Replace($replacement.find,$replacement.replace)
+    }
+    [IO.File]::WriteAllText($recipe,$text,[Text.UTF8Encoding]::new($false))
+    if ((Get-FileHash -LiteralPath $recipe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $patch.patched_sha256) { throw "Patched recipe hash mismatch: $($patch.path)" }
+}
 if (-not $SkipLLVM) {
     $llvmArchive = Get-VerifiedArchive $lock.llvm $dependencyRoot
     $llvmDirectory = Join-Path $dependencyRoot 'LLVM22'

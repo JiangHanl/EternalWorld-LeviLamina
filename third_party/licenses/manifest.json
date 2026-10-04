@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "audited_utc": "2026-10-04T09:13:10.1319196Z",
+  "audited_utc": "2026-10-04T10:13:03.5522394Z",
   "scope": "License texts and extracted complete notices only; upstream source/toolchain is not vendored.",
   "files": [
     {
@@ -159,6 +159,17 @@
       "sha256": "87f33608570312a0f2a9745edcb2527275df813b13982e8c3b3f893d88a4141a",
       "preservation": "verbatim upstream file; EOL normalized to LF only",
       "before_eol_normalization_sha256": "87f33608570312a0f2a9745edcb2527275df813b13982e8c3b3f893d88a4141a"
+    },
+    {
+      "file": "libhat-MIT.txt",
+      "source": ".deps/libhat/libhat-7375873e560f46e8569c6a389c6077f4c7133089/LICENSE",
+      "source_url": "https://raw.githubusercontent.com/BasedInc/libhat/7375873e560f46e8569c6a389c6077f4c7133089/LICENSE",
+      "version": "0.4.0",
+      "commit": "7375873e560f46e8569c6a389c6077f4c7133089",
+      "archive_sha256": "f5bb87e07d86fe164d527f24e0680b3006b6cbbf7ce0919c72491945ce2aad98",
+      "sha256": "4ab064f3048a9cb88924d1ec503ab695ff06eb0e53678bf8084a11c24ea12f7d",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "4ab064f3048a9cb88924d1ec503ab695ff06eb0e53678bf8084a11c24ea12f7d"
     }
   ],
   "text_eol": "LF; UTF-8 content preserved"

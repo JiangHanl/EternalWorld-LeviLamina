@@ -19,6 +19,10 @@
 
 测试需要真实 Python 运行时；如 `python` 在本机指向 Windows Store 别名，可通过 `-Python <python.exe 路径>` 指定已安装的运行时。
 
+仅 Host 源变更时，可使用 `Build-Portable.ps1 -HostOnly`；工具会拒绝模块源或 DLL 摘要漂移，并在收据中保留原模块构建来源。
+
+首次云构建在上游 `libhat 0.4.0` Git 下载阶段失败。`Prepare-CI.ps1` 现在对锁定官方 recipe 做两处可审计修正：同一 commit 的官方源码 ZIP 与 SHA256 校验，以及 LL 子构建继续使用锁定的官方 recipe 仓库。修改前后 recipe 摘要均写入 `build-lock.json`；构建与 linkrule 仍由官方实现执行。失败诊断保存在 `artifacts/ci/`，CI 不运行服务器。
+
 `Build-Native.ps1` 仅是新便携构建的兼容入口。旧 Core 单独部署和 Phase 0 自动初始化入口已禁用；历史版本保留在本地历史中，不用于当前部署。
 
 9 个真实 DLL 目标为 EternalHost 与 8 个内部模块。输出根为 `bin/Eternal`；仅 Host 使用 LL 原生注册、统一内存算子与官方 SymbolProvider delay resolver。模块使用公开 Eternal ABI，不能链接其他模块的私有实现。EternalCore 复用交易域与私有 SQLite 3.53.4，当前运行状态仍不开放资产业务。

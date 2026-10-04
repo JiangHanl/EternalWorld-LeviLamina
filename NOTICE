@@ -12,6 +12,7 @@ notices, license texts, source references and SHA-256 verification records.
 LeviLamina open-source parts: LGPL-3.0 with accompanying GPL-3.0 text.
 Official mod template: CC0-1.0.
 fmt: MIT with its documented optional exception.
+libhat 0.4.0: MIT; official LeviLamina Windows build dependency.
 SQLite: upstream public-domain disclaimer and blessing.
 SymbolProvider: original source-file public-domain notice and mingw-w64
 DISCLAIMER.PD; it is not relicensed as project MIT.

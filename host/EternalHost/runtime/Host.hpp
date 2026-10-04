@@ -58,6 +58,15 @@ public:
     static bool discover(const std::filesystem::path& base, const std::vector<ModuleConfig>& config,
                          std::vector<Candidate>& out, std::string& error);
     bool load(const std::vector<Candidate>& candidates, std::string& error);
+    // One explicit startup-to-server-thread handoff after successful Load and
+    // before any Enable attempt. The adapter must ensure the old thread is idle.
+    // Not available to modules; all subsequent calls stay on the bound thread.
+    bool bindFirstEnableThread(std::string& error);
+    bool onBoundThread() const noexcept;
+    // Trusted adapter's terminal stop only: the saved Windows server-thread
+    // handle must prove that thread has exited. Stops and unloads modules,
+    // permanently rejects Load/Enable, and never makes ordinary Disable migrate.
+    bool finishStopAfterServerThreadExit(std::string& error);
     bool enable(std::string& error);
     bool disable(std::string& error);
     bool shutdown(std::string& error);

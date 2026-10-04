@@ -163,6 +163,16 @@ typedef const EmModuleDescriptor* (EM_CALL *EmGetDescriptorFn)(void) EM_NOEXCEPT
 typedef EmStatus (EM_CALL *EmLoadFn)(const EmHostContext* context) EM_NOEXCEPT;
 typedef EmStatus (EM_CALL *EmLifecycleFn)(void) EM_NOEXCEPT;
 
+/* Load may run on the Host's startup thread. Before the first Enable attempt,
+ * the trusted Host adapter may explicitly hand off once to the server thread,
+ * only while no lifecycle/dispatch or service/subscription is active. Modules
+ * must not assume Load and Enable share a thread. Enable and all later calls,
+ * including context callbacks, stay on that bound thread; modules cannot rebind
+ * it or call context callbacks from workers. Only terminal process shutdown may
+ * run Disable/Unload on a shutdown thread, after Host's retained OS thread handle
+ * proves the server thread exited; this permanently forbids Enable/Load again.
+ * Terminal cleanup must not access a destroyed Bedrock world. This is not asset
+ * authorization, and a Stopping flag alone never authorizes thread migration. */
 EM_EXPORT const EmModuleDescriptor* EM_CALL EternalModule_GetDescriptor(void) EM_NOEXCEPT;
 EM_EXPORT EmStatus EM_CALL EternalModule_Load(const EmHostContext* context) EM_NOEXCEPT;
 EM_EXPORT EmStatus EM_CALL EternalModule_Enable(void) EM_NOEXCEPT;

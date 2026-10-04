@@ -7,6 +7,9 @@
 #include "ll/api/command/CommandHandle.h"
 #include "ll/api/command/CommandRegistrar.h"
 #include "ll/api/mod/RegisterHelper.h"
+#include "ll/api/memory/Hook.h"
+#include "ll/api/service/GamingStatus.h"
+#include "mc/server/ServerInstance.h"
 #include "mc/server/commands/CommandOrigin.h"
 #include "mc/server/commands/CommandOutput.h"
 
@@ -83,6 +86,13 @@ bool HostMod::load() {
 bool HostMod::enable() {
     try {
         std::string error;
+        if (!firstEnableThreadBound_) {
+            if (!host_.bindFirstEnableThread(error)) {
+                self_.getLogger().error("EternalHost enable thread handoff failed: {}", error);
+                return false;
+            }
+            firstEnableThreadBound_ = true;
+        }
         if (!host_.enable(error)) {
             self_.getLogger().error("EternalHost enable failed: {}", error);
             return false;
@@ -124,6 +134,14 @@ bool HostMod::enable() {
 
 bool HostMod::disable() {
     try {
+        if (!host_.onBoundThread() && ll::getGamingStatus() == ll::GamingStatus::Stopping) {
+            // LL disables mods before leaveGameSync joins the server thread.
+            // Keep the Host image resident and finish only after the OS handle
+            // proves that no server-thread module callback can still execute.
+            stopDeferred_.store(true);
+            self_.getLogger().info("EternalHost shutdown deferred until server thread exit");
+            return true;
+        }
         std::string error;
         const bool stopped = host_.disable(error);
         if (!stopped) self_.getLogger().error("EternalHost disable failed: {}", error);
@@ -131,6 +149,31 @@ bool HostMod::disable() {
         return stopped;
     } catch (...) { return false; }
 }
+
+void HostMod::finishServerStop() noexcept {
+    if (!stopDeferred_.exchange(false)) return;
+    try {
+        std::string error;
+        if (!host_.finishStopAfterServerThreadExit(error)) {
+            self_.getLogger().error("EternalHost stop cleanup FAIL: {}", error);
+            return;
+        }
+        self_.getLogger().info("EternalHost stop cleanup PASS; internal modules disabled and unloaded");
+    } catch (...) {
+        self_.getLogger().error("EternalHost stop cleanup FAIL at adapter boundary");
+    }
+}
+}
+
+LL_AUTO_TYPE_INSTANCE_HOOK(
+    EternalServerStopHook,
+    ll::memory::HookPriority::Normal,
+    ServerInstance,
+    &ServerInstance::leaveGameSync,
+    void
+) {
+    origin();
+    eternal::adapter::HostMod::getInstance().finishServerStop();
 }
 
 // LL owns command callbacks. As in Phase 1, live LL hot-unload is deliberately

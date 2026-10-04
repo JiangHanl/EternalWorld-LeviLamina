@@ -1,4 +1,4 @@
-param()
+param([switch]$HostOnly)
 . (Join-Path $PSScriptRoot 'NativeToolchain.ps1')
 function Get-SourceHash([string]$path) {
     $hash = [Security.Cryptography.SHA256]::Create()
@@ -26,12 +26,31 @@ $commonFlags = @('/nologo','/std:c++20','/EHa','/MD','/utf-8','/O2','/D_HAS_CXX2
 $runtimeLibraries = @('msvcrt.lib','msvcprt.lib','vcruntime.lib','ucrt.lib','kernel32.lib')
 $sqlite = Join-Path $dependencyRoot 'sqlite/sqlite-amalgamation-3530400'
 $sqliteObject = Join-Path $build 'sqlite3.obj'
+$moduleNames = @('EternalCore','EternalCommerce','EternalLife','EternalWorld','EternalContent','EternalManagement','EternalPresentation','EternalEncounters')
+$products = @()
+$moduleBaseline = $null
+if ($HostOnly) {
+    $receiptPath = Join-Path $build 'build-receipt.json'
+    if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) { throw 'Host-only build requires an existing complete build receipt' }
+    $baseline = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+    $moduleSources = @($baseline.sources | Where-Object { $_.path -match '^modules[\\/]' })
+    $currentModuleSources = @($sourceHashes | Where-Object { $_.path -match '^modules[\\/]' })
+    if ($moduleSources.Count -ne $currentModuleSources.Count) { throw 'Internal module sources changed; run a complete build' }
+    foreach ($source in $moduleSources) {
+        if ((Get-SourceHash (Join-Path $projectRoot $source.path)) -ne $source.sha256) { throw "Internal module source changed; run a complete build: $($source.path)" }
+    }
+    foreach ($name in $moduleNames) {
+        $product = @($baseline.products | Where-Object target -eq $name)
+        if ($product.Count -ne 1 -or (Get-SourceHash (Join-Path $output $product[0].path)) -ne $product[0].sha256) { throw "Internal module baseline is missing or changed: $name" }
+        $products += $product[0]
+    }
+    if ($baseline.module_baseline) { $moduleBaseline = $baseline.module_baseline }
+    else { $moduleBaseline = [pscustomobject]@{built_utc=$baseline.built_utc;receipt_sha256=(Get-SourceHash $receiptPath);sources=$moduleSources;products=$products} }
+} else {
 & $nativeCompiler '/nologo' '/std:c11' '/TC' '/MD' '/O2' '/DSQLITE_THREADSAFE=1' '/DSQLITE_DQS=0' '/DSQLITE_ENABLE_API_ARMOR=1' "/imsvc$msvcInclude" "/imsvc$windowsInclude/ucrt" "/imsvc$windowsInclude/shared" "/imsvc$windowsInclude/um" '/c' (Join-Path $sqlite 'sqlite3.c') ('/Fo'+$sqliteObject)
 if ($LASTEXITCODE -ne 0) { throw 'Private SQLite compilation failed' }
 $domainFlags = $commonFlags + @("/I$sqlite","/I$projectRoot/modules/EternalCore/domain")
 $domainObjects = @((Compile-Cpp 'modules/EternalCore/domain/Core.cpp' $domainFlags),(Compile-Cpp 'modules/EternalCore/domain/Sha256.cpp' $domainFlags),$sqliteObject)
-$moduleNames = @('EternalCore','EternalCommerce','EternalLife','EternalWorld','EternalContent','EternalManagement','EternalPresentation','EternalEncounters')
-$products = @()
 foreach ($name in $moduleNames) {
     $flags = $commonFlags + @('/DETERNAL_MODULE_BUILD')
     $objects = @()
@@ -47,6 +66,7 @@ foreach ($name in $moduleNames) {
     $products += [pscustomobject]@{target=$name;path=('modules/'+$name+'.dll');sha256=(Get-SourceHash $dll)}
     & $nativeReadobj '--coff-exports' '--coff-imports' $dll | Set-Content -LiteralPath (Join-Path $build ($name+'-inspection.txt')) -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw "Module DLL inspection failed: $name" }
+}
 }
 $hostSources = @('host/EternalHost/HostMod.cpp') + @((Get-ChildItem -LiteralPath (Join-Path $projectRoot 'host/EternalHost/runtime') -Filter '*.cpp' -File).FullName | ForEach-Object { $_.Substring($projectRoot.Length+1) })
 $hostFlags = $nativeCompilerArguments + @("/I$projectRoot/host/EternalHost","/I$projectRoot/host/EternalHost/runtime")
@@ -75,5 +95,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Host DLL inspection failed' }
 foreach ($source in $sourceHashes) {
     if ((Get-SourceHash (Join-Path $projectRoot $source.path)) -ne $source.sha256) { throw "Build input changed during compilation: $($source.path)" }
 }
-[pscustomobject]@{format_version=1;architecture='Host + 8 internal ABI modules';compiler='LLVM22 clang-cl MSVC ABI /MD';levilamina='26.51.6';sources=$sourceHashes;products=$products;built_utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $build 'build-receipt.json') -Encoding utf8
-Write-Output 'Built EternalHost and all 8 internal module DLLs. No deployment or server startup was performed.'
+[pscustomobject]@{format_version=2;host_only=[bool]$HostOnly;module_baseline=$moduleBaseline;architecture='Host + 8 internal ABI modules';compiler='LLVM22 clang-cl MSVC ABI /MD';levilamina='26.51.6';sources=$sourceHashes;products=$products;built_utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $build 'build-receipt.json') -Encoding utf8
+if ($HostOnly) { Write-Output 'Rebuilt EternalHost and verified the unchanged 8 internal module DLLs. No deployment or server startup was performed.' }
+else { Write-Output 'Built EternalHost and all 8 internal module DLLs. No deployment or server startup was performed.' }
