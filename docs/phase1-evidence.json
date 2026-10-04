@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-04",
+  "scope": "minimum_native_core_and_sdk_diagnostics",
+  "result": "PASS",
+  "bdsVersion": "1.26.51.1",
+  "leviLaminaVersion": "26.51.6",
+  "coreVersion": "0.1.0",
+  "apiVersion": "1.0",
+  "dllSha256": "650206fae3eda26f7059ca0c0008c2784a20ba858dc97f64e0f025f0bfa05f02",
+  "runtimePluginDirectories": ["LeviLamina", "EternalCore"],
+  "requiredExports": ["EternalCore_QueryApi", "ll_mod_load", "ll_memory_operator_overrided"],
+  "assetFeatureBits": 0,
+  "realBdsChecks": {
+    "load": "PASS",
+    "enable": "PASS",
+    "ecoreStatus": "PASS",
+    "ecoreSelfcheck": "PASS",
+    "llList": "There are 1 mods: EternalCore",
+    "disable": "PASS",
+    "commandWhileDisabled": "EXPECTED_REJECTION: Command version mismatch",
+    "reenableAndCommands": "PASS",
+    "hotUnload": "EXPECTED_REJECTION: The mod does not register an unload function",
+    "firstGracefulStopExitCode": 0,
+    "fullRestartLoadAndCommands": "PASS",
+    "restartGracefulStopExitCode": 0
+  },
+  "independentChecks": {
+    "sdkC11WindowsX64Layout": "PASS",
+    "sdkCpp20WindowsX64Layout": "PASS",
+    "sdkServiceExecutable": "PASS",
+    "sqliteDomainTestGroups": 17,
+    "sqliteDomainResult": "PASS",
+    "domainIdentityInputs": "synthetic_verified_identity_fixtures",
+    "faultTests": "C++ exception injection and real child process _Exit, not power loss"
+  },
+  "earlierFailure": {
+    "time": "2026-10-04 15:38:21 Asia/Shanghai",
+    "exception": "0xC06D007E",
+    "trigger": "first ecore status command",
+    "cause": "missing official SymbolProvider static dependency; standard system delayimp attempted to load the virtual Bedrock module",
+    "resolution": "compile official SymbolProvider v1.3.0 and remove standard delayimp; no proxy DLL or old runtime"
+  },
+  "limitations": [
+    "No real player/client asset operations or capability chain acceptance.",
+    "Standalone SQLite domain is not linked into the Phase 1 DLL.",
+    "Rejected domain requests do not yet have durable formal receipts.",
+    "No old-world or old-business-data migration performed.",
+    "No TPS, business, land-protection or visual acceptance claims."
+  ],
+  "serverStopped": true
+}

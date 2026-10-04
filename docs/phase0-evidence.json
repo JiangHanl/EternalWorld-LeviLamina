@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-04",
+  "type": "real_bds_baseline_only",
+  "workingDirectory": "server/",
+  "bdsVersion": "1.26.51.1",
+  "leviLaminaVersion": "26.51.6",
+  "levelName": "EternalNativeTest",
+  "transport": "NetherNet",
+  "port": 19142,
+  "startupSeconds": 1.8,
+  "runtimePluginDirectories": ["LeviLamina"],
+  "llListOutput": "There are 0 mods:",
+  "stopOutput": "Quit correctly",
+  "exitCode": 0,
+  "eternalCoreDllBuilt": false,
+  "eternalCoreLoaded": false,
+  "notes": [
+    "A second real startup after copying the non-asset data/bootstrap.json confirmed profiler configuration success=1; world reload, ll list and graceful stop succeeded again.",
+    "No real player/client functional tests were performed."
+  ]
+}

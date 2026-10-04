@@ -1,0 +1,72 @@
+#pragma once
+#include "EternalSDK/Module/module_abi.h"
+#include <filesystem>
+#include <functional>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace eternal::host {
+struct ModuleConfig {
+    std::string id;
+    std::filesystem::path path; // Relative to the Host's configured base directory.
+    bool enabled{false};
+    bool required{false};
+};
+struct Candidate {
+    std::string id;
+    std::filesystem::path path;
+    bool enabled{false};
+    bool required{false};
+};
+enum class ModuleState { Disabled, Discovered, Loaded, Enabled, Failed, Quarantined, Skipped, Unloaded };
+struct ModuleSnapshot {
+    std::string id;
+    std::string display_name;
+    EmSemVer version{};
+    ModuleState state{ModuleState::Discovered};
+    std::string diagnostic;
+};
+struct Snapshot {
+    bool loaded{};
+    bool enabled{};
+    bool quarantined{};
+    std::vector<ModuleSnapshot> modules;
+    std::size_t service_count{};
+    std::size_t subscription_count{};
+};
+class Library {
+public:
+    virtual ~Library() = default;
+    virtual void* symbol(const char* name) noexcept = 0;
+    // Leak/quarantine the image intentionally if safe teardown cannot be proven.
+    virtual void quarantine() noexcept = 0;
+};
+class LibraryLoader {
+public:
+    virtual ~LibraryLoader() = default;
+    virtual std::unique_ptr<Library> open(const std::filesystem::path& path, std::string& error) = 0;
+};
+using LogSink = std::function<void(uint32_t, std::string_view)>;
+class Host final {
+public:
+    explicit Host(std::unique_ptr<LibraryLoader> loader = {}, LogSink log = {});
+    ~Host();
+    Host(const Host&) = delete;
+    Host& operator=(const Host&) = delete;
+    static bool discover(const std::filesystem::path& base, const std::vector<ModuleConfig>& config,
+                         std::vector<Candidate>& out, std::string& error);
+    bool load(const std::vector<Candidate>& candidates, std::string& error);
+    bool enable(std::string& error);
+    bool disable(std::string& error);
+    bool shutdown(std::string& error);
+    Snapshot snapshot() const;
+    EmStatus queryService(const EmServiceRequest& request, EmServiceReference& out) noexcept;
+    EmStatus publishEvent(const EmEvent& event) noexcept;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+const char* stateName(ModuleState state) noexcept;
+} // namespace eternal::host

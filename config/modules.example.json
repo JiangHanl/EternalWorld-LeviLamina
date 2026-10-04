@@ -1,0 +1,12 @@
+{
+  "modules": [
+    { "id": "core", "path": "modules/EternalCore.dll", "enabled": true, "required": true },
+    { "id": "commerce", "path": "modules/EternalCommerce.dll", "enabled": false, "required": false },
+    { "id": "life", "path": "modules/EternalLife.dll", "enabled": false, "required": false },
+    { "id": "world", "path": "modules/EternalWorld.dll", "enabled": false, "required": false },
+    { "id": "content", "path": "modules/EternalContent.dll", "enabled": false, "required": false },
+    { "id": "management", "path": "modules/EternalManagement.dll", "enabled": false, "required": false },
+    { "id": "presentation", "path": "modules/EternalPresentation.dll", "enabled": false, "required": false },
+    { "id": "encounters", "path": "modules/EternalEncounters.dll", "enabled": false, "required": false }
+  ]
+}

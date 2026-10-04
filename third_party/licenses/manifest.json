@@ -1,0 +1,165 @@
+{
+  "format_version": 1,
+  "audited_utc": "2026-10-04T09:13:10.1319196Z",
+  "scope": "License texts and extracted complete notices only; upstream source/toolchain is not vendored.",
+  "files": [
+    {
+      "file": "LeviLamina-GPL-3.0.txt",
+      "source": ".deps/sdk-source/LeviLamina-26.51.6/COPYING",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "file": "LeviLamina-LGPL-3.0.txt",
+      "source": ".deps/sdk-source/LeviLamina-26.51.6/COPYING.LESSER",
+      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+    },
+    {
+      "file": "OfficialTemplate-CC0-1.0.txt",
+      "source": ".deps/official-template/levilamina-mod-template-main/LICENSE",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "file": "fmt-MIT.txt",
+      "source": ".deps/ll-headers/fmt/fmt-11.2.0/LICENSE",
+      "sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8"
+    },
+    {
+      "file": "concurrentqueue-BSD.txt",
+      "source": ".deps/ll-headers/concurrentqueue/concurrentqueue-1.0.4/LICENSE.md",
+      "sha256": "22331571e5e3dbe4c79ad715e23127bdf3beabd75052c953ddabf191ef799e14",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "22331571e5e3dbe4c79ad715e23127bdf3beabd75052c953ddabf191ef799e14"
+    },
+    {
+      "file": "debug_assert-MIT.txt",
+      "source": ".deps/ll-headers/debug_assert/debug_assert-1.3.4/LICENSE",
+      "sha256": "195c95c8dc2349255994fe270c623a79b058ede80e0484d3361ca394133e2306",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "195c95c8dc2349255994fe270c623a79b058ede80e0484d3361ca394133e2306"
+    },
+    {
+      "file": "EnTT-MIT.txt",
+      "source": ".deps/ll-headers/entt/entt-4.0.0/LICENSE",
+      "sha256": "73547f6370ee16ea560665329bb62d4e2d8250f41eaa204b47a6c694ca3286ea",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "73547f6370ee16ea560665329bb62d4e2d8250f41eaa204b47a6c694ca3286ea"
+    },
+    {
+      "file": "expected-lite-BSL.txt",
+      "source": ".deps/ll-headers/expected-lite/expected-lite-f339d2f73730f8fee4412f5e4938717866ecef48/LICENSE.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566"
+    },
+    {
+      "file": "GLM-copying.txt",
+      "source": ".deps/ll-headers/glm/glm-1.0.1/copying.txt",
+      "sha256": "62d2d642c7d054d4fb4c9b42faad617d6c88fcd91e317f8035aa9f277cc159c3",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "62d2d642c7d054d4fb4c9b42faad617d6c88fcd91e317f8035aa9f277cc159c3"
+    },
+    {
+      "file": "GSL-MIT.txt",
+      "source": ".deps/ll-headers/gsl/GSL-4.2.0/LICENSE",
+      "sha256": "4c21dc82a1c7186ea754fd59d504c00947953a3401fe8e24eaa44109ef8e2555",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "4c21dc82a1c7186ea754fd59d504c00947953a3401fe8e24eaa44109ef8e2555"
+    },
+    {
+      "file": "nlohmann-json-MIT.txt",
+      "source": ".deps/ll-headers/json/json-3.12.0/LICENSE.MIT",
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603"
+    },
+    {
+      "file": "LevelDB-BSD.txt",
+      "source": ".deps/ll-headers/leveldb/leveldb-1.23/LICENSE",
+      "sha256": "ccc19f1da0798ed666609b65a5b44dd8b3abe6fc08b9c0592eb76e82e174db19",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "ccc19f1da0798ed666609b65a5b44dd8b3abe6fc08b9c0592eb76e82e174db19"
+    },
+    {
+      "file": "magic_enum-MIT.txt",
+      "source": ".deps/ll-headers/magic_enum/magic_enum-0.9.7/LICENSE",
+      "sha256": "bd227b8a5586dc73012262abfc0fc4eb84c2a91ad3f93b3591f8148fe17324d3",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "bd227b8a5586dc73012262abfc0fc4eb84c2a91ad3f93b3591f8148fe17324d3"
+    },
+    {
+      "file": "parallel-hashmap-Apache-2.0.txt",
+      "source": ".deps/ll-headers/parallel-hashmap/parallel-hashmap-2.0.0/LICENSE",
+      "sha256": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe"
+    },
+    {
+      "file": "Boost-PFR-BSL.txt",
+      "source": ".deps/ll-headers/pfr/pfr-294a4976bd04829dd204aaf9e9fd30338a5d3199/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566"
+    },
+    {
+      "file": "RapidJSON-license.txt",
+      "source": ".deps/ll-headers/rapidjson/rapidjson-24b5e7a8b27f42fa16b96fc70aade9106cf7102f/license.txt",
+      "sha256": "a140e5d46fe734a1c78f1a3c3ef207871dd75648be71fdda8e309b23ab8b1f32",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "a140e5d46fe734a1c78f1a3c3ef207871dd75648be71fdda8e309b23ab8b1f32"
+    },
+    {
+      "file": "stb-license.txt",
+      "source": ".deps/ll-headers/stb/stb-f0569113c93ad095470c54bf34a17b36646bbbb5/LICENSE",
+      "sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "bebfe904b14301657e4e5d655c811d51fd31b97c455b9cc2d8600d6bac6cff63"
+    },
+    {
+      "file": "type_safe-MIT.txt",
+      "source": ".deps/ll-headers/type_safe/type_safe-0.2.4/LICENSE",
+      "sha256": "c9b2c3b9c65bf163d4338d9f56edb0ce0846e91d7b89e1a1e35326abbc8997ae",
+      "preservation": "verbatim file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "c9b2c3b9c65bf163d4338d9f56edb0ce0846e91d7b89e1a1e35326abbc8997ae"
+    },
+    {
+      "file": "SymbolProvider-Public-Domain-Notice.txt",
+      "source": ".deps/symbolprovider/SymbolProvider-6c93ec45c8455992ee726d92df60316c8e731c44/src/SymbolProvider.cpp",
+      "sha256": "90b38b4351ad01643bc92856d0308ba55175db0a764435af346c8df6e0cf3823",
+      "preservation": "complete source-file notice extracted; EOL normalized to LF only",
+      "source_file_sha256": "7478d26ef21ea417383bf276deba540126410a7abb700402f7cedd79e2bb79fd",
+      "before_eol_normalization_sha256": "26613ec828a60c1e4f8fc3f45070b9cfa51cfba136f3a4e70730d52895b1cf9b"
+    },
+    {
+      "file": "SQLite-Public-Domain-Notice.txt",
+      "source": ".deps/sqlite/sqlite-amalgamation-3530400/sqlite3.h",
+      "sha256": "a4073095982a84421da1a1e49bd26e97ba1a09c2de5dda5eac776cd4a420d41a",
+      "preservation": "complete source-file notice extracted; EOL normalized to LF only",
+      "source_file_sha256": "919e7f2e8ed1d8f56ac17b412b8971c76aa5d1a879752cc6058f75e7d5910e1d",
+      "before_eol_normalization_sha256": "0ff2eb786306bd97001816e20d34bdb113484a1e0956e6ef8416d1f5cc0ff7de"
+    },
+    {
+      "file": "concurrentqueue-semaphore-zlib.txt",
+      "source": ".deps/ll-headers/concurrentqueue/concurrentqueue-1.0.4/lightweightsemaphore.h",
+      "sha256": "3930e843f04ed7bc7a754b5c367469cbe5a08366d9afc54743b836c400147117",
+      "preservation": "complete source-file notice extracted; EOL normalized to LF only",
+      "source_file_sha256": "0b78024f079a6b43fd9373b9402be3bc18291bf6b5bc391acf35d1ef89d324ae",
+      "before_eol_normalization_sha256": "8319404eaaa731e462bd568816110d223a05af914e7ebb85f186c08aaa525b4a"
+    },
+    {
+      "file": "mingw-w64-DISCLAIMER.PD.txt",
+      "source": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/master/DISCLAIMER.PD",
+      "sha256": "87f33608570312a0f2a9745edcb2527275df813b13982e8c3b3f893d88a4141a",
+      "preservation": "verbatim upstream file; EOL normalized to LF only",
+      "before_eol_normalization_sha256": "87f33608570312a0f2a9745edcb2527275df813b13982e8c3b3f893d88a4141a"
+    }
+  ],
+  "text_eol": "LF; UTF-8 content preserved"
+}

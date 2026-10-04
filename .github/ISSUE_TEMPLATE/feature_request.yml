@@ -1,0 +1,32 @@
+name: Feature / 功能建议
+description: Propose a capability within the modular architecture / 提出模块功能建议
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 需要解决的问题
+      description: Explain the player or operator need with a concrete example.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired behavior / 期望效果
+    validations:
+      required: true
+  - type: input
+    id: module
+    attributes:
+      label: Existing module / 所属模块
+      description: Prefer an existing business module. Describe a new DLL only for a separate business domain.
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Public SDK and asset effects / SDK 边界与资产影响
+      description: Required capabilities or events, authorization, transaction/idempotency and recovery requirements.
+  - type: textarea
+    id: validation
+    attributes:
+      label: Acceptance / 验收方式
+      description: Distinguish CI tests from real BDS and client tests.

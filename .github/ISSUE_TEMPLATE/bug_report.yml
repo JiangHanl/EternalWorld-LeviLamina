@@ -1,0 +1,42 @@
+name: Bug / 缺陷报告
+description: Report a reproducible framework or module problem / 报告可复现问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先移除玩家身份、XUID、IP、路径中的用户名、Token、密码及数据库内容。
+        Remove player identifiers, private paths, IPs, credentials and databases. Report vulnerabilities using SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Eternal version / commit
+      description: Version, commit SHA and whether this is an Actions artifact.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: BDS, LeviLamina, Windows and module API/ABI versions. Identify REAL BDS or standalone test.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction / 复现步骤
+      description: Steps, enabled modules and relevant sanitized configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior / 预期与实际表现
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics / 脱敏诊断
+      description: Minimal log excerpts only. Never upload a server root, world, player database or crash dump.
+      render: text

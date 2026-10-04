@@ -1,0 +1,9 @@
+{
+  "name": "Eternal",
+  "entry": "EternalHost.dll",
+  "type": "native",
+  "platform": "server",
+  "version": "0.1.0-alpha.1",
+  "description": "永恒世界原生 Host 与内部模块（Phase 1.5 原型）",
+  "author": "EternalWorld contributors"
+}

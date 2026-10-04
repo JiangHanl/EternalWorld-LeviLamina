@@ -1,0 +1,43 @@
+[2026-10-04 14:55:47.289 IFO][Server] Server started in (1.8s)! For help, type "help" or "?"
+[2026-10-04 14:59:54.010 IFO][Server] Server stop requested.
+[2026-10-04 14:59:54.061 IFO][Server] Stopping server...
+[2026-10-04 15:11:25.016 IFO][Server] Server started in (1.8s)! For help, type "help" or "?"
+[2026-10-04 15:11:47.909 IFO][Server] Server stop requested.
+[2026-10-04 15:11:47.972 IFO][Server] Stopping server...
+[2026-10-04 15:37:36.532 IFO][LeviLamina] 正在加载 EternalCore v0.1.0
+[2026-10-04 15:37:36.533 IFO][EternalCore] [永恒核心] 最小原生原型已加载，API 1.0
+[2026-10-04 15:37:36.534 IFO][LeviLamina] EternalCore 已加载
+[2026-10-04 15:37:38.744 IFO][Server] Server started in (2.3s)! For help, type "help" or "?"
+[2026-10-04 15:47:29.075 IFO][LeviLamina] 正在加载 EternalCore v0.1.0
+[2026-10-04 15:47:29.075 IFO][EternalCore] [永恒核心] 最小原生原型已加载，API 1.0
+[2026-10-04 15:47:29.075 IFO][LeviLamina] EternalCore 已加载
+[2026-10-04 15:47:30.858 IFO][Server] Server started in (1.8s)! For help, type "help" or "?"
+[2026-10-04 15:47:30.912 IFO][LeviLamina] 正在启用 EternalCore v0.1.0
+[2026-10-04 15:47:30.913 IFO][EternalCore] [永恒核心] 服务已启用：ecore status / ecore selfcheck
+[2026-10-04 15:47:49.561 IFO][Server] EternalCore 0.1.0 | API 1.0 | native lifecycle ready | business features disabled
+[2026-10-04 15:47:49.575 IFO][Server] EternalCore ABI selfcheck PASS (no asset operations)
+[2026-10-04 15:47:49.625 IFO][Server] There are 1 mods: EternalCore
+[2026-10-04 15:47:49.681 ERR][Server] Failed to unload mod EternalCore
+[2026-10-04 15:48:11.043 IFO][EternalCore] [永恒核心] 服务已停止
+[2026-10-04 15:48:11.043 IFO][Server] Disable mod EternalCore successfully
+[2026-10-04 15:48:25.510 IFO][EternalCore] [永恒核心] 服务已启用：ecore status / ecore selfcheck
+[2026-10-04 15:48:25.510 IFO][Server] Enable mod EternalCore successfully
+[2026-10-04 15:48:25.559 IFO][Server] EternalCore 0.1.0 | API 1.0 | native lifecycle ready | business features disabled
+[2026-10-04 15:48:25.621 IFO][Server] EternalCore ABI selfcheck PASS (no asset operations)
+[2026-10-04 15:48:25.676 IFO][Server] Server stop requested.
+[2026-10-04 15:48:25.741 IFO][Server] Stopping server...
+[2026-10-04 15:48:25.741 IFO][LeviLamina] 正在禁用 EternalCore v0.1.0
+[2026-10-04 15:48:25.741 IFO][EternalCore] [永恒核心] 服务已停止
+[2026-10-04 15:49:07.741 IFO][LeviLamina] 正在加载 EternalCore v0.1.0
+[2026-10-04 15:49:07.742 IFO][EternalCore] [永恒核心] 最小原生原型已加载，API 1.0
+[2026-10-04 15:49:07.742 IFO][LeviLamina] EternalCore 已加载
+[2026-10-04 15:49:09.410 IFO][Server] Server started in (1.7s)! For help, type "help" or "?"
+[2026-10-04 15:49:09.463 IFO][LeviLamina] 正在启用 EternalCore v0.1.0
+[2026-10-04 15:49:09.464 IFO][EternalCore] [永恒核心] 服务已启用：ecore status / ecore selfcheck
+[2026-10-04 15:50:04.682 IFO][Server] EternalCore 0.1.0 | API 1.0 | native lifecycle ready | business features disabled
+[2026-10-04 15:50:04.694 IFO][Server] EternalCore ABI selfcheck PASS (no asset operations)
+[2026-10-04 15:50:04.770 IFO][Server] There are 1 mods: EternalCore
+[2026-10-04 15:50:04.816 IFO][Server] Server stop requested.
+[2026-10-04 15:50:04.879 IFO][Server] Stopping server...
+[2026-10-04 15:50:04.879 IFO][LeviLamina] 正在禁用 EternalCore v0.1.0
+[2026-10-04 15:50:04.879 IFO][EternalCore] [永恒核心] 服务已停止

@@ -1,0 +1,19 @@
+EternalWorld - LeviLamina
+Copyright (c) 2026 EternalWorld contributors.
+Original project code is licensed under the accompanying MIT LICENSE.
+
+This project uses separately licensed dependencies. The project MIT license
+does not relicense upstream software or authorize redistribution of Bedrock
+Dedicated Server, vanilla assets, Microsoft toolchain packages, or runtime
+symbol data.
+
+See THIRD_PARTY_NOTICES.md and third_party/licenses for preserved upstream
+notices, license texts, source references and SHA-256 verification records.
+LeviLamina open-source parts: LGPL-3.0 with accompanying GPL-3.0 text.
+Official mod template: CC0-1.0.
+fmt: MIT with its documented optional exception.
+SQLite: upstream public-domain disclaimer and blessing.
+SymbolProvider: original source-file public-domain notice and mingw-w64
+DISCLAIMER.PD; it is not relicensed as project MIT.
+
+No affiliation with Mojang, Microsoft, or LeviMC is claimed.

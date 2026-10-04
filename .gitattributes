@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.exe binary
+*.dll binary
+*.lib binary
+*.zip binary
+# Preserve verbatim upstream license whitespace without treating it as code lint.
+third_party/licenses/*.txt -whitespace

@@ -1,0 +1,76 @@
+name: Draft alpha release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing alpha tag (v0.x.y-alpha.N)
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require an alpha version below v1
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v0\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]; then
+            echo 'Only existing v0.x.y-alpha.N tags can produce draft releases.' >&2
+            exit 1
+          fi
+  build:
+    needs: validate
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ inputs.tag }}
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: EternalWorld-windows-x64
+          path: release
+      - name: Verify packaged SHA256
+        env:
+          BUILD_COMMIT: ${{ needs.build.outputs.commit }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, zipfile
+          root = pathlib.Path('release')
+          zips = list(root.glob('EternalWorld-*-windows-x64.zip'))
+          assert len(zips) == 1, 'Exactly one release package is required'
+          archive = zips[0]
+          assert archive.name == 'EternalWorld-'+os.environ['BUILD_COMMIT']+'-windows-x64.zip'
+          expected, filename = pathlib.Path(str(archive)+'.sha256').read_text().split()
+          assert filename == archive.name
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == expected
+          with zipfile.ZipFile(archive) as package:
+              manifest = json.loads(package.read('Eternal/manifest.json'))
+              assert manifest['version'] == os.environ['RELEASE_TAG'][1:], 'Tag and manifest version differ'
+              info = json.loads(package.read('Eternal/resources/build-info.json'))
+              assert info['source_commit'] == os.environ['BUILD_COMMIT']
+          notes = (f"Eternal {info['eternal_version']} 原生 alpha 原型。\n\n"
+                   f"EternalSDK Core API {info['sdk_core_api']} / Module ABI {info['sdk_module_abi']}；"
+                   f"LeviLamina {info['levilamina']}；BDS {info['bds']}。\n\n"
+                   f"LLVM {info['llvm']} / XMake {info['xmake']} / {info['language']} / {info['runtime']}。\n\n"
+                   "只包含 Eternal 插件目录；不包含 BDS、LeviLamina、玩家数据或日志。"
+                   "云端产物仍需实际 BDS 测试；完整玩法尚未完成验收。\n")
+          (root/'notes.md').write_text(notes, encoding='utf-8')
+          PY
+      - name: Create draft prerelease only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" release/*.zip release/*.sha256 --verify-tag --draft --prerelease \
+            --title "EternalWorld $RELEASE_TAG" \
+            --notes-file release/notes.md
