@@ -1,0 +1,75 @@
+{
+  "format_version": 1,
+  "phase": "2",
+  "date": "2026-10-05",
+  "source_commit": "8cf831f1e06a7a021492c625071ecf6061808f24",
+  "environment": {
+    "bds": "1.26.51.1",
+    "levilamina": "26.51.6",
+    "dll_origin": "hash-verified GitHub Actions artifacts",
+    "production_asset_feature_bits": 0,
+    "business_modules": "PLANNED / disabled"
+  },
+  "real_owner_client": {
+    "fully_authenticated_non_simulated_player": "PASS",
+    "trusted_xuid_and_authenticated_uuid": "PASS",
+    "private_owner_configuration_match": "PASS",
+    "money_adjust_permission": "PASS",
+    "money_and_reputation_mutations": "PASS",
+    "same_request_idempotent_replay": "PASS",
+    "conflicting_key_preserves_original_receipt": "PASS",
+    "insufficient_funds_durable_rejection": "PASS",
+    "ledger_and_receipt_consistency": "PASS",
+    "builder_role_grant_and_audit": "PASS",
+    "role_grant_does_not_grant_native_op": "PASS",
+    "public_sdk_invocation_and_scoped_authorization": "PASS",
+    "public_sdk_asset_receipt_outbox_queries": "PASS",
+    "public_sdk_repeated_key_no_duplicate_credit": "PASS",
+    "expired_form_durable_rejection": "PASS",
+    "rejected_requests_no_ledger_or_outbox": "PASS"
+  },
+  "server_side_recovery_after_real_transactions": {
+    "full_restart": "PASS",
+    "disable_enable": "PASS",
+    "stable_identity_and_first_seen": "PASS",
+    "role_and_accounts_preserved": "PASS",
+    "original_receipt_content_preserved": "PASS",
+    "outbox_content_preserved": "PASS",
+    "unacknowledged_consumer_retry_preserved": "PASS",
+    "integrity_and_foreign_keys": "PASS"
+  },
+  "internal_security_regression": {
+    "data": "synthetic",
+    "domain_groups": 30,
+    "runtime_groups": 42,
+    "sdk_groups": 19,
+    "total_groups": 91,
+    "result": "PASS",
+    "process_exit_codes": [0, 0, 0],
+    "real_ordinary_player": false
+  },
+  "not_run": [
+    "real client reauthentication and SDK replay after restart",
+    "real ordinary player denied management",
+    "native OP does not automatically obtain an Eternal management role",
+    "another administrator revokes role while old player form remains open",
+    "two-player transfer",
+    "real account rename or same-name conflict",
+    "real business consumer acknowledgement and deduplication"
+  ],
+  "final_runtime": {
+    "host_dlls": 1,
+    "internal_module_dlls": 8,
+    "enabled_modules": ["core"],
+    "temporary_validation_fixture_removed": true,
+    "development_validation": false,
+    "validated_assets": false,
+    "cloud_dll_hashes_unchanged": true,
+    "formal_directory_smoke_runs": 2,
+    "formal_directory_smoke_result": "PASS",
+    "server_stopped_gracefully": true,
+    "phase3_started": false
+  },
+  "privacy": "Results only; no player identifiers, names, balances, database, world or raw logs included.",
+  "phase2_overall_acceptance": "INCOMPLETE: remaining real scenarios are NOT RUN"
+}

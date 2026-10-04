@@ -1,0 +1,51 @@
+{
+  "format_version": 1,
+  "phase": "2",
+  "source_commit": "8cf831f1e06a7a021492c625071ecf6061808f24",
+  "source_tree": "ce81786dbc3e4d661fbe4d8a49200fd3a75a71b9",
+  "api": "1.2",
+  "module_abi": "1.0",
+  "production_asset_feature_bits": 0,
+  "business_modules": "PLANNED / disabled",
+  "ci": {
+    "run_id": 37217978119,
+    "job_id": 111482302684,
+    "conclusion": "success",
+    "url": "https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119",
+    "executable_test_suites": 12,
+    "counted_groups": 152,
+    "real_bds_in_ci": "NOT RUN",
+    "authenticated_players_in_ci": "NOT RUN"
+  },
+  "production_artifact": {
+    "artifact_id": 11309596050,
+    "download_verified": true,
+    "outer_sha256": "9029faabb172fdb666cb151636cb8752353c1e78b85309aa13054569669d02f4",
+    "inner_zip_sha256": "811635a72e4e2168b71ed09bfa3149d5f7e9647d97ad9c57772c90e97ac9d2d0",
+    "allowlist_files": 40,
+    "dll_count": 9,
+    "host_sha256": "6f9a3af231426d85f608ab3cd6fb2c46496358697b7e044157d151072dd7354f",
+    "core_sha256": "571830b108397a17c18408384d904e9d8d19e6b60e319eaed575c100202359e9"
+  },
+  "isolated_validation_artifact": {
+    "artifact_id": 11309207420,
+    "download_verified": true,
+    "outer_sha256": "5f9d7e4905cde8817aedda2e3e3c1c85aef3c828583f227b848d3984d841317e",
+    "allowlist_files": 2,
+    "dll_sha256": "ebe71ed459000e542bf1cae9efa476af53722a054e082d5774eb805682676bf9",
+    "included_in_production_package": false
+  },
+  "real_bds_cloud_dll_regression": {
+    "bds": "1.26.51.1",
+    "levilamina": "26.51.6",
+    "result": "PASS",
+    "startup_runs": 2,
+    "disable_enable": "PASS",
+    "selfcheck": "PASS",
+    "terminal_cleanup": "PASS in both runs",
+    "exit_codes": [0, 0],
+    "players_connected_during_smoke": false,
+    "network_readiness": "PASS: NetherNet listener and server-info response",
+    "real_authenticated_player_acceptance": "NOT RUN"
+  }
+}

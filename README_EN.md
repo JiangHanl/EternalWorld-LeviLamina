@@ -6,6 +6,8 @@ A native C++ server project for Minecraft Bedrock Dedicated Server and LeviLamin
 
 Phase 1.5 engineering acceptance is complete; its [Windows CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) and real BDS records are preserved. Phase 2 now implements authenticated identity, permissions, capabilities, Money/Reputation, durable rejection receipts and audit. See the [separate report](docs/PHASE2_TEST_REPORT.md) for verified scope. Production asset feature bits remain zero; seven business modules remain PLANNED and disabled. Complete survival gameplay has not been delivered.
 
+The Phase 2 SDK 1.2 [cloud CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119) passed 12 executable suites, 152 counted groups and dual-language layout checks. Both artifacts were downloaded and hash-verified; cloud DLLs passed two real BDS lifecycle runs. Authenticated-player identity, permission and asset acceptance is recorded separately and cannot be replaced by CI.
+
 - [Status](CURRENT_STATUS.md) and [test report](TEST_REPORT.md): verified scope and missing work.
 - [Architecture](ARCHITECTURE.md), [build](BUILD.md) and [dependencies](DEPENDENCY.md): boundaries and pinned toolchain.
 - [API](API.md), [ABI](ABI.md) and [module development](MODULE_DEVELOPMENT.md): public contracts.

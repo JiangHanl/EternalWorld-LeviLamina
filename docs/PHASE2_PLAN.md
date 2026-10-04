@@ -9,7 +9,7 @@
 ## 实施顺序
 
 1. 持久域：编号 002 migration；保留 001 校验及原 17 组语义。验证 fresh/upgrade/失败回滚/未知新版拒绝/备份、身份冲突、资产原子性、拒绝审计与 Outbox 消费者状态。
-2. 公共契约：保留原 96 字节 Core API 与 Module ABI，新增独立 Core 1.1 服务及 POD DTO。跨 DLL 不传 STL、异常、私有类或 SQLite handle。
+2. 公共契约：保留原 96 字节 Core API 与 Module ABI，独立 Core 服务采用 1.2 / 264 字节，并保留 1.1 的完整 240 字节前缀；通过公开 Invocation 路由从真实玩家申请限定票据。跨 DLL 不传 STL、异常、私有类或 SQLite handle。
 3. 可信接入：Host 只复制认证引擎输入和渲染通用诊断表单，Core 决定身份、授权及资产行为。Host 注册的模块查询取得 Core 专属上下文，公共查询拒绝私有 native ingress。
 4. 本地独立测试、公开索引/许可证审查、稳定提交、GitHub Actions、下载云 Artifact、独立 BDS 启停与真实玩家验收。
 
@@ -19,7 +19,7 @@
 
 Core 私有配置持有既有 Owner XUID，Core SQLite 独占玩家、Role、权限版本、账户、事务、账本、Audit、Receipt 与 Outbox。运行配置和真实玩家身份不公开。公开示例 Owner 留空；缺少配置时安全停留在诊断状态，不猜测服主、不自动选首位玩家。
 
-CallerContext 和 Capability 均为 Core 签发的不透明随机值。上下文绑定已注册模块、模块代次、Core 实例代次、在线会话、主体、动作、目标、资产、预算、过期时间和权限版本。请求执行时重新检查，不接受自报 moduleId / Owner / OP。Disable、断线、重连、撤权或过期使旧上下文失效；正式资产 feature 在对应真实链路通过前保持关闭。
+CallerContext 是 Core 签发的不透明模块上下文，绑定已注册模块、模块代次和 Core 实例代次。Invocation 与 Capability 才进一步绑定在线玩家会话、主体、动作、目标、资产、预算、过期时间和权限版本。请求执行时重新检查，不接受自报 moduleId / Owner / OP。模块 Disable 撤销模块上下文及其票据；玩家断线、重连、撤权或过期使对应玩家票据失效，不据此撤销整个模块。正式资产 feature 在对应真实链路通过前保持关闭。
 
 模块声明的服务需求只说明接口依赖，Core 配置另行批准可用能力。模块配置、身份会话和权限必须同时满足；缺失时拒绝服务或方法，不回退读取私有数据库。原生 DLL 是运营者批准的本机代码，这些接口不构成恶意代码内存沙箱。
 

@@ -6,6 +6,8 @@
 
 Phase 1.5 工程化验收已完成，原 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 和真实 BDS 记录保留。Phase 2 正在接入认证身份、权限、Capability、Money/Reputation、拒绝回执与审计；具体已验证范围见 [独立报告](docs/PHASE2_TEST_REPORT.md)。正式资产 feature bits 保持 0，七个业务模块仍为 PLANNED 并默认禁用；完整生存玩法尚未交付。
 
+Phase 2 SDK 1.2 的 [云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119) 已通过，12 套测试、152 组计数用例及双语言布局检查通过。云 Artifact 已实际下载核验，云 DLL 完成两轮真实 BDS 启停回归；真实玩家身份、权限与资产验收单独记录，不能由 CI 替代。
+
 | 入口 | 内容 |
 |---|---|
 | [当前状态](CURRENT_STATUS.md) / [测试报告](TEST_REPORT.md) | 已验证范围与未完成项 |
