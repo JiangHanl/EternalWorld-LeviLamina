@@ -25,12 +25,12 @@
 | 模块版本/依赖/生命周期/错误回滚 | PASS，本地mock及真实模块DLL | 初始18组Host，首次交接增至20组，终止交接增至23组mock通过；新Host实际停服清理通过 |
 | Host唯一LL插件/真实BDS | PASS，新Host两次完整运行 | 启动/诊断/手动停用恢复/重启通过；两次stop均明确cleanup PASS、无关闭错误、退出码0，无玩家 |
 | Core/Module两套SDK契约 | PASS，本地C11/C++20布局及C++辅助验证 | 静态布局与console验证，不代替引擎动态验收 |
-| 云CI与发布allowlist | 首次实际CI失败；本地修复已准备，未通过 | libhat依赖安装/下载失败，尚未进入业务源码编译；修复尚未推送重跑 |
-| staged/public树及祖先审查 | PASS，首次156文件源码树 | 后续改动须重新暂存审查；默认提交邮箱公开已获用户授权 |
+| 云CI与发布allowlist | PASS，实际Windows Release构建/测试/打包/上传 | run 37199429155，source 93dbe05e；39个包内文件、九DLL、两层摘要已下载核验 |
+| staged/public树及祖先审查 | PASS，云CI检查161文件源码树；收尾163文件索引另行审查通过 | 私人Phase1祖先不发布；默认提交邮箱公开已获用户授权 |
 | 原生玩家资产/能力链 | NOT RUN | 可信入口、授权撤销与真实客户端 |
 | 业务/旧数据迁移/视觉 | NOT RUN | 各阶段用例和客户端效果 |
 
-Phase1.5结果按实际产物补录，不能引用旧EternalCore DLL摘要冒充新Host验收。当前PASS覆盖本地构建、console/SDK验证、23组Host mock及指定新Host产物的完整真实BDS生命周期；云CI仍无通过结果，阶段不推进至Phase2。
+Phase1.5结果按实际产物补录，不能引用旧EternalCore DLL摘要冒充新Host验收。当前PASS覆盖本地构建、云端全部目标与测试、下载云产物的完整真实BDS生命周期。Phase1.5验收完成；Phase2身份、权限和真实资产实现仍未开始。
 
 本地七个console的执行日志与九DLL构建receipt保留在artifacts，未将带私人路径的原日志公开。Host mock已从20组增加至23组，包含首次启动线程至服务器线程交接的限制，以及服务器线程仍存活时拒绝终止交接、线程实际退出后的逆序最终清理与永久禁止重新启用、缺少OS退出证明时拒绝和清理失败隔离。23组可执行测试已额外实跑通过；此处通过不代表公开typed引擎钩子或真实BDS停服验收。
 
@@ -48,7 +48,18 @@ Phase1.5结果按实际产物补录，不能引用旧EternalCore DLL摘要冒充
 
 旧部分验收Host SHA-256为72bd3c5b36d45163d3cc2ac2e378f1bfc25a1959945aa8736aac88869453f216；本次完整验收Host SHA-256为4a4bef31d753fb07918b4d0fee4e7a4ea6475cb3e14d012e0844e4e6ccade9db，已复核本地DLL一致。选中诊断及结构化证据在docs/phase1.5-evidence.json。新结果仍不证明玩家资产、玩法或客户端体验，且不替代云CI。
 
-云CI首次运行37193348084在官方libhat包安装/下载阶段失败，不是业务源码编译错误；本地下载修复已采用固定摘要的官方归档来源，尚未推送重跑。保留首次失败事实，修复后须重新执行，未通过前不推进Phase2。
+云CI失败历史保留：37193348084在libhat Git下载阶段失败；37196149851选到通用expected-lite而缺LL指定重载；37197312986显示子构建无序缓存仍会选错同名配方。最终从两个固定官方归档生成同一配方树，主工程与子构建统一使用，实际XMake解析器验证三种缓存情形。93dbe05e的run 37199429155已完整通过，未修改上游业务或LL头实现。
+
+
+## 云编译闭环与云产物真实BDS
+
+[Windows Actions run 37199429155](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 对 source `93dbe05eba4410b73c5c9ce27e16888949e49d58` 执行固定LLVM22.1.0/XMake3.1.1、LL26.51.6/BDS1.26.51.1、C++20/MD构建。Host与八模块九个DLL链接完成；15个SDK结构布局在C11/C++20编译验证，Core17组、Host23组、七套console及八个真实模块DLL的导出和Core生命周期通过。CI不启动BDS。
+
+[Artifact 11302132760](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155/artifacts/11302132760) 仅含安装ZIP与SHA256。下载后外层SHA256为`4446f01d9dbc8e8049c521a445947a7932efd5f53c06d81cd4a71f8d1607ffed`；安装ZIP为`085fa70f8dfb0b4ca7573c76c9d9e59c24bf1fc656c06c36bd513400d03242b4`，两者均实查一致。安装包39个文件，包括九DLL、manifest、配置示例、build-info与许可证；不含BDS、LL、世界、数据库、日志或PDB。记录的Artifact到期时间为2026-10-18T11:51:53Z，之后应重新构建。
+
+下载包的九DLL部署到独立测试服务器后，两次真实BDS启动与停服通过；首轮手动disable/enable、自检、第二轮完整重启通过。两次都明确terminal cleanup PASS，无Host关闭错误，退出码0，无玩家，测试结束服务器停止。云Host SHA256为`c0e69f8818e997e4a4eb0c2de9bfc911ac1debc3f039c6839e18b05f4614d994`，与上面的本地便携Host摘要分别记录。详细证据：[云构建与产物](docs/phase1.5-cloud-evidence.json)、[真实BDS选中诊断](docs/phase1.5-cloud-real-bds-evidence.txt)。
+
+仅更新验收结果的后续文档提交不重跑完整编译；本报告明确绑定上述已实际构建的source SHA。Release workflow已建立但未执行，没有创建正式或草稿版本发布。玩家身份、权限撤销、真实资产API和客户端玩法仍为NOT RUN，七个业务模块PLANNED且关闭。
 
 ## 后续必测
 

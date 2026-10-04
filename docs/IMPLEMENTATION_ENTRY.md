@@ -1,6 +1,6 @@
 # 开发入口
 
-先读根目录CURRENT_STATUS、ARCHITECTURE、API/ABI、DATABASE、BUILD、TODO和TEST_REPORT，再读REQUIREMENTS。Phase1历史基线已经验证；当前Phase1.5将运行图改为Host与八内部模块，需要新证据。
+先读根目录CURRENT_STATUS、ARCHITECTURE、API/ABI、DATABASE、BUILD、TODO和TEST_REPORT，再读REQUIREMENTS。Phase1历史基线保留；Phase1.5的Host与八内部模块结构、云构建及下载产物真实BDS生命周期已验证，证据见phase1.5-cloud-evidence.json。后续身份、权限和真实资产属于Phase2，不能沿用生命周期PASS当作业务验收。
 
 目录：host/EternalHost 为LL适配；modules/EternalCore/domain 为内部事务域；modules/EternalCore/api 为服务实现；sdk/EternalSDK 为公共契约与辅助头，sdk/EternalSDK/include 为标准include转发路径；migrations/EternalCore 为唯一编号SQL。业务模块不包含私有域，也不打开他人数据库。
 

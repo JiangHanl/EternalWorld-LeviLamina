@@ -4,7 +4,7 @@
 
 A native C++ server project for Minecraft Bedrock Dedicated Server and LeviLamina. The target architecture has one thin loader, **EternalHost**, eight internal native modules, and an EternalSDK exposing a versioned C ABI with C++ helpers. Only the Host integrates with the engine; modules own separate business responsibilities and communicate through published interfaces.
 
-This is a Phase 1.5 development prototype. Local builds of nine DLLs, 23 Host test groups, 17 SQLite domain test groups, and real BDS startup, disable/enable, restart and terminal cleanup have passed. Cloud builds still require independent verification. Asset APIs remain disabled, and seven business modules are legal skeletons only. This is not a complete production survival server.
+Phase 1.5 engineering acceptance is complete: local builds of nine DLLs, 23 Host test groups, 17 SQLite domain test groups and the actual [Windows CI run](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) passed. Local products and that cloud artifact separately passed two real BDS runs, disable/enable, full restart and terminal cleanup. Asset APIs still return UNSUPPORTED; seven business modules remain PLANNED and disabled by default. Phase 2 and complete survival gameplay are not implemented.
 
 - [Status](CURRENT_STATUS.md) and [test report](TEST_REPORT.md): verified scope and missing work.
 - [Architecture](ARCHITECTURE.md), [build](BUILD.md) and [dependencies](DEPENDENCY.md): boundaries and pinned toolchain.
@@ -61,6 +61,8 @@ The [deployment helper](tools/Deploy-Host.ps1) copies local products and initial
 GitHub Actions is the primary environment: Windows x64 / Server / Release, LLVM **22.1.0**, XMake **3.1.1**, C++20 and **MD** runtime. Sources and hashes are in the [build lock](tools/build-lock.json). Each DLL has its own target. CI builds all nine DLLs, runs SDK, Core, Host, configuration and actual DLL tests, then creates `EternalWorld-<commit>-windows-x64.zip` and SHA256.
 
 See [BUILD](BUILD.md) for local reproduction and preserved portable tools. CI never runs BDS; real-server acceptance is recorded separately. Artifacts contain only Eternal, project DLLs, configuration examples, build metadata and licenses, without a server, world, database or logs.
+
+The successful cloud build used source `93dbe05eba4410b73c5c9ce27e16888949e49d58` and produced artifact `11302132760`, containing 39 allowlisted files and nine DLLs. The downloaded products were independently tested on BDS **1.26.51.1** / LL **26.51.6**, without connected players. This does not constitute player-asset or client-gameplay acceptance.
 
 The [release workflow](.github/workflows/release.yml) builds, tests, packages and hashes an existing `v0.x.y-alpha.N` tag, then creates a draft prerelease. Metadata records Eternal, API, ABI, LL and BDS compatibility. No stable 1.0 or published release is claimed yet.
 

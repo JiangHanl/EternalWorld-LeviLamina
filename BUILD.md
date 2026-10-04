@@ -4,7 +4,7 @@
 
 ## Phase 1.5 目标流程
 
-在仓库根目录使用 PowerShell。新工具仍处于 Phase 1.5 实施中，具体可用状态见 CURRENT_STATUS.md；未跑的命令不得写为通过。
+在仓库根目录使用 PowerShell。Phase 1.5 的正式构建、测试与安装包已通过实际 GitHub Actions；下载产物的真实BDS生命周期也已通过，详见 TEST_REPORT.md。其他版本和玩家玩法仍需各自验收。
 
 ```powershell
 & '.\tools\Build-Release.ps1'

@@ -104,7 +104,13 @@
       "resolution": "Defer terminal cleanup until the retained OS server-thread handle is signaled, then disable/unload permanently; smoke asserts cleanup and checks stop errors"
     }
   ],
-  "cloudBuild": "PENDING; tracked independently",
+  "cloudBuild": {
+    "result": "PASS",
+    "source_sha": "93dbe05eba4410b73c5c9ce27e16888949e49d58",
+    "run_id": 37199429155,
+    "separate_evidence": "docs/phase1.5-cloud-evidence.json",
+    "portable_products_above_are_not_cloud_binaries": true
+  },
   "limitations": [
     "No real player or client gameplay acceptance",
     "Business module skeletons are PLANNED and disabled",

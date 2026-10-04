@@ -1,6 +1,6 @@
 # 公开前审计
 
-日期：2026-10-04。审计范围为源码、可公开文档、许可证与Git公开树；本审阅者不打开真实玩家数据库、不修改运行数据、不执行公开写入。首次源码main已公开，Phase1.5指定新Host产物的完整真实BDS生命周期已通过，云CI仍未通过，不能把本报告当作正式版本发布PASS。
+日期：2026-10-04。审计范围为源码、可公开文档、许可证与Git公开树；本审阅者不打开真实玩家数据库、不修改运行数据、不执行公开写入。Phase1.5工程化验收已完成：本地与实际云Artifact的完整BDS生命周期、Windows云CI通过；最终文档提交和公开树仍按发布流程复核，不宣称Phase2或正式Release已实现。
 
 ## 已完成
 
@@ -22,7 +22,13 @@ SDK冻结后重新检查156个工作树文件，扫描通过；真实运营者�
 
 随后独立复核156文件暂存索引，扫描与diff检查通过。首次源码提交为74a0130156cfcd86ac3343f0c18218b354b8c047，其tree为ae020ba297d5748b2f4e8d017ba58eddd88ab9f4，与已审查的本地源码tree一致。通过GitHub只读Git对象API核对：唯一父提交13d03b0083c5219d993a848423e3505ebaf52129是初始README且无父提交，因此该公开父链不包含私人基线。本地开发commit仍继承私人历史，不能直接push其branch或tag；本轮只导出已审查tree内容。后续修改须重新暂存和审查，不能沿用首次提交结论。
 
-后续运行验收保留失败历史：先前产物在stop关闭阶段换线程，Host停用失败，退出码0不能证明生命周期成功。显式终止交接修复后的新Host在BDS1.26.51.1/LL26.51.6两次完整运行通过：启动、服务诊断、手动停用恢复、重启检查及双终止cleanup PASS，无关闭错误、退出码均为0；无玩家，资产接口仍关闭，服务器已停止。新Host SHA-256为4a4bef31d753fb07918b4d0fee4e7a4ea6475cb3e14d012e0844e4e6ccade9db，实查本地文件一致，详见TEST_REPORT与docs/phase1.5-evidence.json。云CI首轮37193348084在libhat官方依赖安装/下载阶段失败，尚未进入业务源码编译；本地下载修复已准备但尚未推送重跑，不将本地/BDS结果替代云CI。
+后续运行验收保留失败历史：先前产物在stop关闭阶段换线程，Host停用失败，退出码0不能证明生命周期成功。显式终止交接修复后的本地Host在BDS1.26.51.1/LL26.51.6两次完整运行通过：启动、服务诊断、手动停用恢复、重启检查及双终止cleanup PASS，无关闭错误、退出码均为0；无玩家，资产接口仍关闭。该本地Host SHA-256为4a4bef31d753fb07918b4d0fee4e7a4ea6475cb3e14d012e0844e4e6ccade9db，详见TEST_REPORT与docs/phase1.5-evidence.json。云CI首轮37193348084在libhat官方依赖安装/下载阶段失败，尚未进入业务源码编译；固定官方归档与摘要后重跑通过，保留首次失败事实。
+
+最终Windows云CI源码为93dbe05eba4410b73c5c9ce27e16888949e49d58，run37199429155/job111427872268，Artifact11302132760。本审阅者以GitHub只读API独立核验run已completed/success且head SHA相符。该Artifact外层ZIP SHA-256为4446f01d9dbc8e8049c521a445947a7932efd5f53c06d81cd4a71f8d1607ffed，内部Eternal运行ZIP SHA-256为085fa70f8dfb0b4ca7573c76c9d9e59c24bf1fc656c06c36bd513400d03242b4，两者是不同文件，不能混用。运行包含39条allowlist、九个DLL，固定LLVM22.1.0/XMake3.1.1/LL26.51.6/BDS1.26.51.1/API与ABI1.0/C++20/MD。
+
+实际云DLL随后部署至该BDS/LL组合，完成两次启动和停服、首轮手动disable/enable、自检及完整重启；两次terminal cleanup PASS、退出码0且无关闭错误，无玩家，服务器已停止。云Host SHA-256为c0e69f8818e997e4a4eb0c2de9bfc911ac1debc3f039c6839e18b05f4614d994，已实查部署文件一致。独立云验收见docs/phase1.5-cloud-evidence.json。七个业务模块仍PLANNED并禁用，Core资产API仍UNSUPPORTED；本地、云构建和实服证据分别归属，不能把工程化完成写成玩法完成。
+
+当前163文件工作树与最终暂存索引扫描通过，公开树及其祖先单独复核；文档/证据收尾提交不改变云验收绑定的源码93dbe05eba4410b73c5c9ce27e16888949e49d58，不宣称该文档提交重新构建了产物。
 
 ```powershell
 & '.\tools\Test-PublicTree.ps1' -SelfTest

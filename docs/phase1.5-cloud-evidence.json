@@ -1,0 +1,223 @@
+{
+  "format_version": 1,
+  "source_sha": "93dbe05eba4410b73c5c9ce27e16888949e49d58",
+  "run_id": 37199429155,
+  "job_id": 111427872268,
+  "conclusion": "success",
+  "run_url": "https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155",
+  "checks": {
+    "official_recipe_cases": 3,
+    "compiled_runtime_dll_targets": 9,
+    "sdk_c11": true,
+    "sdk_cpp20": true,
+    "sdk_declared_struct_layouts": 15,
+    "module_abi_layouts": true,
+    "core_domain_groups": 17,
+    "host_runtime_groups": 23,
+    "console_suites": 7,
+    "actual_module_dlls_loaded": 8,
+    "public_tree_files": 161,
+    "source_boundary": true
+  },
+  "artifact": {
+    "id": 11302132760,
+    "name": "EternalWorld-windows-x64",
+    "size_in_bytes": 288811,
+    "outer_zip_digest": "sha256:4446f01d9dbc8e8049c521a445947a7932efd5f53c06d81cd4a71f8d1607ffed",
+    "inner_package": "EternalWorld-93dbe05eba4410b73c5c9ce27e16888949e49d58-windows-x64.zip",
+    "inner_package_sha256": "085fa70f8dfb0b4ca7573c76c9d9e59c24bf1fc656c06c36bd513400d03242b4",
+    "uploaded_files": 2,
+    "expired": false,
+    "expires_at": "2026-10-18T11:51:53Z",
+    "entries": [
+      "Eternal/config/modules.example.json",
+      "Eternal/EternalHost.dll",
+      "Eternal/LICENSE",
+      "Eternal/manifest.json",
+      "Eternal/modules/EternalCommerce.dll",
+      "Eternal/modules/EternalContent.dll",
+      "Eternal/modules/EternalCore.dll",
+      "Eternal/modules/EternalEncounters.dll",
+      "Eternal/modules/EternalLife.dll",
+      "Eternal/modules/EternalManagement.dll",
+      "Eternal/modules/EternalPresentation.dll",
+      "Eternal/modules/EternalWorld.dll",
+      "Eternal/NOTICE",
+      "Eternal/resources/build-info.json",
+      "Eternal/THIRD_PARTY_NOTICES.md",
+      "Eternal/third_party/licenses/Boost-PFR-BSL.txt",
+      "Eternal/third_party/licenses/concurrentqueue-BSD.txt",
+      "Eternal/third_party/licenses/concurrentqueue-semaphore-zlib.txt",
+      "Eternal/third_party/licenses/debug_assert-MIT.txt",
+      "Eternal/third_party/licenses/EnTT-MIT.txt",
+      "Eternal/third_party/licenses/expected-lite-BSL.txt",
+      "Eternal/third_party/licenses/fmt-MIT.txt",
+      "Eternal/third_party/licenses/GLM-copying.txt",
+      "Eternal/third_party/licenses/GSL-MIT.txt",
+      "Eternal/third_party/licenses/LevelDB-BSD.txt",
+      "Eternal/third_party/licenses/LeviLamina-GPL-3.0.txt",
+      "Eternal/third_party/licenses/LeviLamina-LGPL-3.0.txt",
+      "Eternal/third_party/licenses/libhat-MIT.txt",
+      "Eternal/third_party/licenses/magic_enum-MIT.txt",
+      "Eternal/third_party/licenses/manifest.json",
+      "Eternal/third_party/licenses/mingw-w64-DISCLAIMER.PD.txt",
+      "Eternal/third_party/licenses/nlohmann-json-MIT.txt",
+      "Eternal/third_party/licenses/OfficialTemplate-CC0-1.0.txt",
+      "Eternal/third_party/licenses/parallel-hashmap-Apache-2.0.txt",
+      "Eternal/third_party/licenses/RapidJSON-license.txt",
+      "Eternal/third_party/licenses/SQLite-Public-Domain-Notice.txt",
+      "Eternal/third_party/licenses/stb-license.txt",
+      "Eternal/third_party/licenses/SymbolProvider-Public-Domain-Notice.txt",
+      "Eternal/third_party/licenses/type_safe-MIT.txt"
+    ],
+    "inner_entries": 39,
+    "local_sha256_verified": true
+  },
+  "scope": {
+    "ci_bds_started": false,
+    "cloud_host_dll_bds_validation": "PASS; separately executed on real BDS after artifact download",
+    "phase1_feature_bits": 0,
+    "planned_modules": 7,
+    "player_and_client_acceptance": "NOT RUN",
+    "release_workflow_execution": "NOT RUN; draft alpha workflow established"
+  },
+  "selected_job_evidence": [
+    "2026-10-04T11:39:05.6255907Z PASS recipe expected-lite: levimc-repo",
+    "2026-10-04T11:39:05.6263316Z PASS recipe libhat: levimc-repo",
+    "2026-10-04T11:39:05.6269946Z PASS recipe levilamina: levimc-repo",
+    "2026-10-04T11:39:05.6277636Z PASS recipe leveldb: levimc-repo",
+    "2026-10-04T11:39:05.6280001Z PASS expected-lite source f339d2f73730f8fee4412f5e4938717866ecef48; libhat source 7375873e560f46e8569c6a389c6077f4c7133089 / SHA256 f5bb87e07d86fe164d527f24e0680b3006b6cbbf7ce0919c72491945ce2aad98",
+    "2026-10-04T11:39:08.6358234Z PASS recipe expected-lite: xmake-repo",
+    "2026-10-04T11:39:08.6365623Z PASS recipe libhat: xmake-repo",
+    "2026-10-04T11:39:08.6373122Z PASS recipe levilamina: xmake-repo",
+    "2026-10-04T11:39:08.6380892Z PASS recipe leveldb: xmake-repo",
+    "2026-10-04T11:39:08.6384533Z PASS expected-lite source f339d2f73730f8fee4412f5e4938717866ecef48; libhat source 7375873e560f46e8569c6a389c6077f4c7133089 / SHA256 f5bb87e07d86fe164d527f24e0680b3006b6cbbf7ce0919c72491945ce2aad98",
+    "2026-10-04T11:39:10.7137893Z PASS recipe expected-lite: levimc-repo",
+    "2026-10-04T11:39:10.7146164Z PASS recipe libhat: levimc-repo",
+    "2026-10-04T11:39:10.7152258Z PASS recipe levilamina: levimc-repo",
+    "2026-10-04T11:39:10.7159619Z PASS recipe leveldb: levimc-repo",
+    "2026-10-04T11:39:10.7163433Z PASS expected-lite source f339d2f73730f8fee4412f5e4938717866ecef48; libhat source 7375873e560f46e8569c6a389c6077f4c7133089 / SHA256 f5bb87e07d86fe164d527f24e0680b3006b6cbbf7ce0919c72491945ce2aad98",
+    "2026-10-04T11:39:10.7291137Z Official recipe selection passed for the root project and both child cache insertion orders.",
+    "2026-10-04T11:40:11.5139746Z PASS public tree: Staged, 161 files; review author metadata and licenses separately.",
+    "2026-10-04T11:50:57.8304849Z {\"staticSourceChecks\": true, \"declaredStructLayouts\": 15, \"phase1FeatureBits\": 0, \"minorUnitsPerLiang\": 100, \"c11Compiled\": true, \"cpp20Compiled\": true, \"dllLoaded\": false, \"bdsStarted\": false, \"moduleAbiLayoutsCompiled\": true}",
+    "2026-10-04T11:51:07.6375815Z PASS 17 groups (exception injection and real process _Exit covered)",
+    "2026-10-04T11:51:09.8093305Z PASS: standalone SDK service version, lifecycle, validation, unsupported capabilities",
+    "2026-10-04T11:51:17.4076906Z PASS: 23 Host runtime behavior groups (mock modules; no BDS claim)",
+    "2026-10-04T11:51:29.1358732Z PASS configuration types, duplicate keys/IDs/paths, traversal, required Core and atomic parse output",
+    "2026-10-04T11:51:31.9603548Z PASS: SDK C++ headers, private config paths and module-local exception boundary",
+    "2026-10-04T11:51:39.3333614Z PASS actual DLL contract EternalCore",
+    "2026-10-04T11:51:39.3333970Z PASS actual DLL contract EternalCommerce",
+    "2026-10-04T11:51:39.3334238Z PASS actual DLL contract EternalLife",
+    "2026-10-04T11:51:39.3334789Z PASS actual DLL contract EternalWorld",
+    "2026-10-04T11:51:39.3335044Z PASS actual DLL contract EternalContent",
+    "2026-10-04T11:51:39.3335311Z PASS actual DLL contract EternalManagement",
+    "2026-10-04T11:51:39.3335763Z PASS actual DLL contract EternalPresentation",
+    "2026-10-04T11:51:39.3336113Z PASS actual DLL contract EternalEncounters",
+    "2026-10-04T11:51:39.3336444Z PASS actual DLL Host/Core load, service revocation, re-enable and unload",
+    "2026-10-04T11:51:49.9945958Z PASS public tree: Staged, 161 files; review author metadata and licenses separately.",
+    "2026-10-04T11:51:50.1277731Z PASS: Host/internal module source boundary and requested runtime allowlist",
+    "2026-10-04T11:51:50.8659797Z SHA256: 085fa70f8dfb0b4ca7573c76c9d9e59c24bf1fc656c06c36bd513400d03242b4"
+  ],
+  "date": "2026-10-04",
+  "phase": "1.5",
+  "result": "PASS",
+  "build_info": {
+    "source_commit": "93dbe05eba4410b73c5c9ce27e16888949e49d58",
+    "eternal_version": "0.1.0-alpha.1",
+    "sdk_core_api": "1.0",
+    "sdk_module_abi": "1.0",
+    "levilamina": "26.51.6",
+    "bds": "1.26.51.1",
+    "llvm": "22.1.0",
+    "xmake": "3.1.1",
+    "platform": "windows-x64",
+    "language": "C++20",
+    "runtime": "MD",
+    "bds_validation": "REAL BDS TEST REQUIRED"
+  },
+  "products": [
+    {
+      "path": "EternalHost.dll",
+      "sha256": "c0e69f8818e997e4a4eb0c2de9bfc911ac1debc3f039c6839e18b05f4614d994"
+    },
+    {
+      "path": "modules/EternalCommerce.dll",
+      "sha256": "5a330112fc0f69beada94bf7c0502cc633d1560fafa7976d8fd753f9a55e95b1"
+    },
+    {
+      "path": "modules/EternalContent.dll",
+      "sha256": "82635e85d671b14849a9fc6e85cf02792067c0616c9f5142b8417cc9e887fb9c"
+    },
+    {
+      "path": "modules/EternalCore.dll",
+      "sha256": "f2b0db980404b7ff8cd24bdd4f318743768187c0e0b48a791fef410165d6c22c"
+    },
+    {
+      "path": "modules/EternalEncounters.dll",
+      "sha256": "ee664143e3eec1dc47273bbf44ce3b290c7591884aa83c7c0e47bab52a2f5824"
+    },
+    {
+      "path": "modules/EternalLife.dll",
+      "sha256": "b602c84d9c63b73515e2275c9861a8f94f43375caca2a5721fc53b58fa0ea522"
+    },
+    {
+      "path": "modules/EternalManagement.dll",
+      "sha256": "cd38073aac5ee1962ee7b1f25282e16fcefed913fb2fc99e661efe97c6b475d3"
+    },
+    {
+      "path": "modules/EternalPresentation.dll",
+      "sha256": "8e72d209e05fe89aab010e00904b14f936ba59ee9c00502a92f836c6a1365fe6"
+    },
+    {
+      "path": "modules/EternalWorld.dll",
+      "sha256": "d31e7f3ef905dc169a4daadd65778fff449dfa876269445e062ec282bf83aa71"
+    }
+  ],
+  "real_bds": {
+    "result": "PASS",
+    "environment": "REAL BDS",
+    "restart_runs": 2,
+    "host": "Eternal",
+    "core": "internal DLL module",
+    "asset_features": 0,
+    "players_connected": false,
+    "server_stopped": true,
+    "checks": [
+      "load",
+      "enable",
+      "ecore status",
+      "ecore selfcheck",
+      "eternal status",
+      "ll list",
+      "manual disable/enable",
+      "selfcheck after enable",
+      "full restart",
+      "terminal cleanup PASS in both runs",
+      "no Host shutdown errors",
+      "exit 0 in both runs"
+    ],
+    "evidence_file": "docs/phase1.5-cloud-real-bds-evidence.txt"
+  },
+  "earlier_ci_failures": [
+    {
+      "run_id": 37193348084,
+      "cause": "Upstream libhat Git transport failed before source compilation"
+    },
+    {
+      "run_id": 37196149851,
+      "cause": "Generic expected-lite recipe missed the fixed official LL in-place overloads"
+    },
+    {
+      "run_id": 37197312986,
+      "cause": "Nested unordered repository cache selected generic recipes despite root ordering"
+    }
+  ],
+  "limitations": [
+    "Core asset APIs UNSUPPORTED and feature bits zero",
+    "Seven business modules PLANNED and disabled",
+    "CI does not start BDS",
+    "Real BDS regression had no players or client gameplay",
+    "Release workflow not executed; no version release created",
+    "Private Phase 1 ancestry and runtime data not published"
+  ]
+}

@@ -4,7 +4,7 @@
 
 以 Minecraft Bedrock Dedicated Server 与 LeviLamina 为运行环境的原生 C++ 服务器工程。目标架构是一个薄加载插件 **EternalHost**、八个内部原生模块，以及面向开发者的 EternalSDK C/C++ 接口。Host 接触引擎；模块按业务职责拆分，通过版本化接口协作。
 
-目前是 Phase 1.5 开发原型。本地九个 DLL、23 组 Host 测试、17 组 SQLite 事务域测试及真实 BDS 双启动、停用恢复和完整停服已通过；云构建仍待独立验证。玩家资产 API 保持关闭，七个业务模块仅有合法骨架，不能作为完整生存服务器部署。
+Phase 1.5 工程化验收已完成：本地九个 DLL、23 组 Host 测试、17 组 SQLite 事务域测试及实际 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 已通过。本地产物与该云 Artifact 分别通过真实 BDS 两次启动、停用恢复、完整重启和终止清理。玩家资产 API 仍返回 UNSUPPORTED，七个业务模块仍为 PLANNED 并默认禁用；Phase 2 和完整生存玩法尚未实现。
 
 | 入口 | 内容 |
 |---|---|
@@ -64,6 +64,8 @@ Core 当前是基础设施原型，资产 API 未开放；其余七项均为 **P
 主要环境是 GitHub Actions Windows x64 / Server / Release，固定 LLVM **22.1.0**、XMake **3.1.1**、C++20 与 **MD** runtime，来源与摘要见 [构建锁](tools/build-lock.json)。Host 和每个模块拥有独立 target；CI 构建九个 DLL，运行 SDK、Core、Host、配置和实际 DLL 测试，再生成 `EternalWorld-<commit>-windows-x64.zip` 与 SHA256。
 
 本地复现与保留的便携工具见 [BUILD](BUILD.md)。云 CI 不运行 BDS；实服验收独立记录。Artifact 只含 Eternal、自研 DLL、示例配置、构建信息和许可证，不含服务端、世界、数据库或日志。
+
+已通过的云构建源码为 `93dbe05eba4410b73c5c9ce27e16888949e49d58`，Artifact 为 `11302132760`，运行包含 39 条 allowlist 文件和九个 DLL。其实际下载产物已在 BDS **1.26.51.1** / LL **26.51.6** 复验，无玩家参与；这不代表玩家资产或客户端玩法验收。
 
 [Release 工作流](.github/workflows/release.yml) 对已有 `v0.x.y-alpha.N` tag 重新 Build / Test / Pack / SHA256，然后建立草稿预发布。版本记录 Eternal、API、ABI、LL 与 BDS 兼容组合。当前未宣称稳定 1.0 或已经发布 Release。
 

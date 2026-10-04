@@ -1,11 +1,14 @@
 # 变更记录
 
-## Unreleased · Phase 1.5
+## Unreleased · Phase 1.5工程化验收完成
 
-- 转为一个EternalHost LL插件与八个内部原生模块，统一公开EternalSDK C/C++接口；实施中。
-- 准备模块描述符/依赖/生命周期、实例服务注册、事件归属和构建/发布流程。
+- 转为一个EternalHost LL插件与八个内部原生模块，统一公开EternalSDK C/C++接口；完成模块握手、依赖/生命周期、服务注册、同步事件传输和构建/Artifact流程。
+- 本地九DLL、七个console、23组Host mock、17组SQLite事务域及Core/Module C11/C++20契约验证通过。
+- Windows云CI37199429155对源码93dbe05eba4410b73c5c9ce27e16888949e49d58通过，生成39条allowlist、九DLL的Artifact；实际云产物完成两次真实BDS启动、停用恢复、自检、重启及terminal cleanup验收。
+- 修复manifest错误加载器依赖、首次Load/Enable线程不同和最终stop换线程问题；停服验收要求明确cleanup PASS且无关闭错误，不能只看退出码。
+- 云CI首轮37193348084因libhat官方依赖下载失败，固定官方归档及摘要后重跑通过；失败历史保留。
 - 整理中英文入口、数据/ABI/安全文档与第三方许可证，清理公开树中的私人身份/路径；私人历史保留本地。
-- 业务资产接口保持关闭；本节不是新架构构建或CI通过声明。
+- 七个业务模块仍PLANNED且默认禁用，Core资产API返回UNSUPPORTED；Phase2和完整玩法未实现，尚未发布正式Release。
 
 ## 2026-10-04 · Phase 1本地基线
 

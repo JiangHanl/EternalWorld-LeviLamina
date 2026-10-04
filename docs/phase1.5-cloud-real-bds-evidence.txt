@@ -1,0 +1,15 @@
+[38;2;173;216;230m19:55:02.157[0m [38;2;032;178;170mIFO[0m [Server] Server started in (2.3s)! For help, type "help" or "?"[0m
+[38;2;173;216;230m19:55:02.261[0m [38;2;032;178;170mIFO[0m [Server] EternalCore 0.1.0 | API 1.0 | internal module lifecycle ready | business features disabled[0m
+[38;2;173;216;230m19:55:02.295[0m [38;2;032;178;170mIFO[0m [Server] EternalCore ABI selfcheck PASS (Host service registry; no asset operations)[0m
+[38;2;173;216;230m19:55:02.356[0m [38;2;032;178;170mIFO[0m [Server] EternalHost | module ABI 1.0 | core:enabled | commerce:skipped | life:skipped | world:skipped | content:skipped | management:skipped | presentation:skipped | encounters:skipped[0m
+[38;2;173;216;230m19:55:02.402[0m [38;2;032;178;170mIFO[0m [Server] There are 1 mods: Eternal[0m
+[38;2;173;216;230m19:55:02.463[0m [38;2;032;178;170mIFO[0m [Server] Disable mod Eternal successfully[0m
+[38;2;173;216;230m19:55:02.524[0m [38;2;032;178;170mIFO[0m [Server] Enable mod Eternal successfully[0m
+[38;2;173;216;230m19:55:02.586[0m [38;2;032;178;170mIFO[0m [Server] EternalCore ABI selfcheck PASS (Host service registry; no asset operations)[0m
+[38;2;173;216;230m19:55:02.771[0m [38;2;032;178;170mIFO[0m [Eternal] EternalHost stop cleanup PASS; internal modules disabled and unloaded
+[38;2;173;216;230m19:55:09.485[0m [38;2;032;178;170mIFO[0m [Server] Server started in (1.8s)! For help, type "help" or "?"[0m
+[38;2;173;216;230m19:55:09.585[0m [38;2;032;178;170mIFO[0m [Server] EternalCore 0.1.0 | API 1.0 | internal module lifecycle ready | business features disabled[0m
+[38;2;173;216;230m19:55:09.610[0m [38;2;032;178;170mIFO[0m [Server] EternalCore ABI selfcheck PASS (Host service registry; no asset operations)[0m
+[38;2;173;216;230m19:55:09.671[0m [38;2;032;178;170mIFO[0m [Server] EternalHost | module ABI 1.0 | core:enabled | commerce:skipped | life:skipped | world:skipped | content:skipped | management:skipped | presentation:skipped | encounters:skipped[0m
+[38;2;173;216;230m19:55:09.733[0m [38;2;032;178;170mIFO[0m [Server] There are 1 mods: Eternal[0m
+[38;2;173;216;230m19:55:09.920[0m [38;2;032;178;170mIFO[0m [Eternal] EternalHost stop cleanup PASS; internal modules disabled and unloaded
