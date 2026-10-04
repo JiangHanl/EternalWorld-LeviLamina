@@ -9,8 +9,9 @@ set_languages("c++20")
 set_toolchains("clang-cl")
 
 -- Official recipes fixed by tools/Prepare-CI.ps1 and tools/build-lock.json.
-add_repositories("eternal-main .deps/ci-repositories/xmake/xmake-repo-ae88fa69ee5a39961bf5411d4162d1cbcefd5e0f", {rootdir = os.scriptdir()})
+-- LL's expected-lite recipe pins its required in-place overload; search it first.
 add_repositories("levimc-repo .deps/ci-repositories/levimc/xmake-repo-a74dcb2ad71d4a53e85735b37ad3a65850459bad", {rootdir = os.scriptdir()})
+add_repositories("eternal-main .deps/ci-repositories/xmake/xmake-repo-ae88fa69ee5a39961bf5411d4162d1cbcefd5e0f", {rootdir = os.scriptdir()})
 add_requires("levilamina 26.51.6", {configs = {target_type = "server"}})
 add_requires("levibuildscript 0.6.1")
 add_requires("symbolprovider v1.3.0")
@@ -148,3 +149,4 @@ target("SDKCppTests")
     add_files("sdk/EternalSDK/tests/cpp_headers.cpp")
     set_targetdir("bin/tests")
 target_end()
+

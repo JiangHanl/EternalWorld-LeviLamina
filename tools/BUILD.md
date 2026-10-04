@@ -23,6 +23,8 @@
 
 首次云构建在上游 `libhat 0.4.0` Git 下载阶段失败。`Prepare-CI.ps1` 现在对锁定官方 recipe 做两处可审计修正：同一 commit 的官方源码 ZIP 与 SHA256 校验，以及 LL 子构建继续使用锁定的官方 recipe 仓库。修改前后 recipe 摘要均写入 `build-lock.json`；构建与 linkrule 仍由官方实现执行。失败诊断保存在 `artifacts/ci/`，CI 不运行服务器。
 
+锁定的 LL recipe 仓库必须先于通用 XMake 仓库：LL 为 `expected-lite v0.8.0` 指定含所需 in-place 重载的官方 commit `f339d2f73730f8fee4412f5e4938717866ecef48`。同名通用 recipe 指向不同源码；优先使用 LL recipe 与已验本地 SDK 保持一致，不修改 LL 头或业务实现。
+
 `Build-Native.ps1` 仅是新便携构建的兼容入口。旧 Core 单独部署和 Phase 0 自动初始化入口已禁用；历史版本保留在本地历史中，不用于当前部署。
 
 9 个真实 DLL 目标为 EternalHost 与 8 个内部模块。输出根为 `bin/Eternal`；仅 Host 使用 LL 原生注册、统一内存算子与官方 SymbolProvider delay resolver。模块使用公开 Eternal ABI，不能链接其他模块的私有实现。EternalCore 复用交易域与私有 SQLite 3.53.4，当前运行状态仍不开放资产业务。
@@ -34,3 +36,4 @@
 GitHub Actions 的 build job 只有 `contents: read`；独立 release job 才有 `contents: write`，只对现有 `v0.x.y-alpha.N` tag 创建草稿预发布。actions 均固定官方已核验的 commit SHA。工作流必须在仓库创建、审核并推送后实际运行；仅本地文件验证不能宣称云端 CI 通过。
 
 便携工具链记录在 `docs/toolchain-lock.json`。没有运行系统安装器；VS 顶层 channel manifest 的 CDN hash 不符限制保留，各 VSIX payload 独立校验匹配。Phase 1 的旧 Core DLL 验收只证明当时的原型，不替代新 Host 架构的实服验收。
+
