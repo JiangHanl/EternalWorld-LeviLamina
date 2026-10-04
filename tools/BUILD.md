@@ -23,7 +23,7 @@
 
 首次云构建在上游 `libhat 0.4.0` Git 下载阶段失败。`Prepare-CI.ps1` 现在对锁定官方 recipe 做两处可审计修正：同一 commit 的官方源码 ZIP 与 SHA256 校验，以及 LL 子构建继续使用锁定的官方 recipe 仓库。修改前后 recipe 摘要均写入 `build-lock.json`；构建与 linkrule 仍由官方实现执行。失败诊断保存在 `artifacts/ci/`，CI 不运行服务器。
 
-锁定的 LL recipe 仓库必须先于通用 XMake 仓库：LL 为 `expected-lite v0.8.0` 指定含所需 in-place 重载的官方 commit `f339d2f73730f8fee4412f5e4938717866ecef48`。同名通用 recipe 指向不同源码；优先使用 LL recipe 与已验本地 SDK 保持一致，不修改 LL 头或业务实现。
+LL 为 `expected-lite v0.8.0` 指定含所需 in-place 重载的官方 commit `f339d2f73730f8fee4412f5e4938717866ecef48`。XMake 子构建会把父仓库写入无序缓存，因此仅调整仓库顺序不足以固定同名配方。准备工具现在从两个已校验的官方归档生成一个配方目录：通用 XMake 配方为底，LL 官方配方覆盖同名目录。主构建、默认仓库与 LL 子构建均指向这个目录；`Test-Recipes.ps1` 使用真实 XMake 解析器检查主工程和两种缓存写入次序，确认上述 expected-lite commit 及 libhat 官方 ZIP/SHA256。不修改 LL 头或业务实现。
 
 `Build-Native.ps1` 仅是新便携构建的兼容入口。旧 Core 单独部署和 Phase 0 自动初始化入口已禁用；历史版本保留在本地历史中，不用于当前部署。
 
@@ -36,4 +36,3 @@
 GitHub Actions 的 build job 只有 `contents: read`；独立 release job 才有 `contents: write`，只对现有 `v0.x.y-alpha.N` tag 创建草稿预发布。actions 均固定官方已核验的 commit SHA。工作流必须在仓库创建、审核并推送后实际运行；仅本地文件验证不能宣称云端 CI 通过。
 
 便携工具链记录在 `docs/toolchain-lock.json`。没有运行系统安装器；VS 顶层 channel manifest 的 CDN hash 不符限制保留，各 VSIX payload 独立校验匹配。Phase 1 的旧 Core DLL 验收只证明当时的原型，不替代新 Host 架构的实服验收。
-

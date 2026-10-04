@@ -38,6 +38,14 @@
       "sha256": "0027ba0372b7c50167b6e682189ec246611a7852012ac1142546956ec39e98bf"
     }
   ],
+  "recipe_repository": {
+    "path": ".deps/ci-repositories/eternal",
+    "precedence": ["xmake", "levimc"]
+  },
+  "expected_lite": {
+    "version": "v0.8.0",
+    "commit": "f339d2f73730f8fee4412f5e4938717866ecef48"
+  },
   "recipe_patches": [
     {
       "repository": "levimc",

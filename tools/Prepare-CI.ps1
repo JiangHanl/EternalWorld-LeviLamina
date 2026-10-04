@@ -53,6 +53,23 @@ foreach ($patch in $lock.recipe_patches) {
     [IO.File]::WriteAllText($recipe,$text,[Text.UTF8Encoding]::new($false))
     if ((Get-FileHash -LiteralPath $recipe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $patch.patched_sha256) { throw "Patched recipe hash mismatch: $($patch.path)" }
 }
+# A child XMake install registers parent repositories into an unordered cache.
+# Give every repository name the same official recipe tree so order is immaterial.
+$recipeRoot = Join-Path $projectRoot $lock.recipe_repository.path
+$cacheRoot = [IO.Path]::GetFullPath((Join-Path $dependencyRoot 'ci-repositories'))+[IO.Path]::DirectorySeparatorChar
+$resolvedRecipeRoot = [IO.Path]::GetFullPath($recipeRoot)
+if (-not $resolvedRecipeRoot.StartsWith($cacheRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Generated recipe tree must stay inside the dependency cache' }
+if (Test-Path -LiteralPath $resolvedRecipeRoot) { Remove-Item -LiteralPath $resolvedRecipeRoot -Recurse -Force }
+New-Item -ItemType Directory -Path $resolvedRecipeRoot -Force | Out-Null
+foreach ($name in $lock.recipe_repository.precedence) {
+    $repository = @($lock.repositories | Where-Object name -eq $name)
+    if ($repository.Count -ne 1) { throw "Recipe source repository is not locked: $name" }
+    $source = Join-Path $dependencyRoot ('ci-repositories/'+$name+'/xmake-repo-'+$repository[0].commit)
+    Get-ChildItem -LiteralPath $source -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $resolvedRecipeRoot -Recurse -Force }
+}
+$env:XMAKE_MAIN_REPO = $resolvedRecipeRoot
+if ($env:GITHUB_ENV) { ('XMAKE_MAIN_REPO='+$resolvedRecipeRoot) | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append }
+& (Join-Path $PSScriptRoot 'Test-Recipes.ps1') -Xmake (Join-Path $xmakeBin 'xmake.exe')
 if (-not $SkipLLVM) {
     $llvmArchive = Get-VerifiedArchive $lock.llvm $dependencyRoot
     $llvmDirectory = Join-Path $dependencyRoot 'LLVM22'

@@ -1,6 +1,9 @@
 param([string]$Xmake = 'xmake')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$lock = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'build-lock.json') | ConvertFrom-Json
+$env:XMAKE_MAIN_REPO = Join-Path $projectRoot $lock.recipe_repository.path
+if (-not (Test-Path -LiteralPath (Join-Path $env:XMAKE_MAIN_REPO 'packages/l/levilamina/xmake.lua'))) { throw 'Run Prepare-CI.ps1 before the official build' }
 Push-Location -LiteralPath $projectRoot
 try {
     $diagnostics = Join-Path $projectRoot 'artifacts/ci'
