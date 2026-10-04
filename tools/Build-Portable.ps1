@@ -7,7 +7,7 @@ function Get-SourceHash([string]$path) {
 }
 $output = Join-Path $projectRoot 'bin/Eternal'
 $build = Join-Path $projectRoot 'artifacts/portable'
-foreach ($buildInput in @('host/EternalHost/HostMod.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp','sdk/EternalSDK/include/EternalSDK/Module/module_abi.h')) {
+foreach ($buildInput in @('host/EternalHost/HostMod.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp','modules/EternalCore/runtime/Runtime.cpp','sdk/EternalSDK/include/EternalSDK/Module/module_abi.h')) {
     if (-not (Test-Path -LiteralPath (Join-Path $projectRoot $buildInput) -PathType Leaf)) { throw "Native build input missing: $buildInput" }
 }
 New-Item -ItemType Directory -Path $output,(Join-Path $output 'modules'),$build -Force | Out-Null
@@ -23,6 +23,8 @@ function Compile-Cpp([string]$path,[string[]]$flags) {
     return $object
 }
 $commonFlags = @('/nologo','/std:c++20','/EHa','/MD','/utf-8','/O2','/D_HAS_CXX23=1','/DNOMINMAX','/DUNICODE','/DWIN32_LEAN_AND_MEAN',"/imsvc$msvcInclude","/imsvc$windowsInclude/ucrt","/imsvc$windowsInclude/shared","/imsvc$windowsInclude/um","/I$projectRoot/sdk/EternalSDK/include")
+$jsonInclude = ($headerLock | Where-Object name -eq 'json').include
+if (-not $jsonInclude) { throw 'The fixed nlohmann_json header dependency is missing' }
 $runtimeLibraries = @('msvcrt.lib','msvcprt.lib','vcruntime.lib','ucrt.lib','kernel32.lib')
 $sqlite = Join-Path $dependencyRoot 'sqlite/sqlite-amalgamation-3530400'
 $sqliteObject = Join-Path $build 'sqlite3.obj'
@@ -54,14 +56,20 @@ $domainObjects = @((Compile-Cpp 'modules/EternalCore/domain/Core.cpp' $domainFla
 foreach ($name in $moduleNames) {
     $flags = $commonFlags + @('/DETERNAL_MODULE_BUILD')
     $objects = @()
-    if ($name -eq 'EternalCore') { $flags += @('/DETERNAL_CORE_BUILD',"/I$projectRoot/modules/EternalCore/api") }
+    if ($name -eq 'EternalCore') { $flags += @('/DETERNAL_CORE_BUILD',"/I$projectRoot/modules/EternalCore/api","/I$projectRoot/modules/EternalCore/runtime","/I$projectRoot/modules/EternalCore/domain","/I$sqlite","/I$jsonInclude") }
     $objects += Compile-Cpp ('modules/'+$name+'/Module.cpp') $flags
     if ($name -eq 'EternalCore') {
         $objects += Compile-Cpp 'modules/EternalCore/api/ApiService.cpp' $flags
+        $objects += Compile-Cpp 'modules/EternalCore/runtime/Runtime.cpp' $flags
+        if (Test-Path -LiteralPath (Join-Path $projectRoot 'modules/EternalCore/api/Phase2Service.cpp') -PathType Leaf) {
+            $objects += Compile-Cpp 'modules/EternalCore/api/Phase2Service.cpp' $flags
+        }
         $objects += $domainObjects
     }
+    $moduleLibraries = $runtimeLibraries
+    if ($name -eq 'EternalCore') { $moduleLibraries += 'bcrypt.lib' }
     $dll = Join-Path $output ('modules/'+$name+'.dll')
-    & $nativeLinker @nativeLinkerArguments '/DLL' '/DEBUG' ('/OUT:'+ $dll) ('/PDB:'+ $output+'/modules/'+$name+'.pdb') @objects @runtimeLibraries
+    & $nativeLinker @nativeLinkerArguments '/DLL' '/DEBUG' ('/OUT:'+ $dll) ('/PDB:'+ $output+'/modules/'+$name+'.pdb') @objects @moduleLibraries
     if ($LASTEXITCODE -ne 0) { throw "Internal module link failed: $name" }
     $products += [pscustomobject]@{target=$name;path=('modules/'+$name+'.dll');sha256=(Get-SourceHash $dll)}
     & $nativeReadobj '--coff-exports' '--coff-imports' $dll | Set-Content -LiteralPath (Join-Path $build ($name+'-inspection.txt')) -Encoding utf8
@@ -69,7 +77,11 @@ foreach ($name in $moduleNames) {
 }
 }
 $hostSources = @('host/EternalHost/HostMod.cpp') + @((Get-ChildItem -LiteralPath (Join-Path $projectRoot 'host/EternalHost/runtime') -Filter '*.cpp' -File).FullName | ForEach-Object { $_.Substring($projectRoot.Length+1) })
-$hostFlags = $nativeCompilerArguments + @("/I$projectRoot/host/EternalHost","/I$projectRoot/host/EternalHost/runtime")
+$hostNative = Join-Path $projectRoot 'host/EternalHost/native'
+if (Test-Path -LiteralPath $hostNative -PathType Container) {
+    $hostSources += @((Get-ChildItem -LiteralPath $hostNative -Filter '*.cpp' -File).FullName | ForEach-Object { $_.Substring($projectRoot.Length+1) })
+}
+$hostFlags = $nativeCompilerArguments + @("/I$projectRoot/host/EternalHost","/I$projectRoot/host/EternalHost/runtime","/I$hostNative")
 $hostObjects = @($hostSources | ForEach-Object { Compile-Cpp $_ $hostFlags })
 $hostObjects += Compile-Cpp ((Join-Path $fmtRoot 'src/format.cc').Substring($projectRoot.Length+1)) $hostFlags
 $hostObjects += Compile-Cpp '.deps/symbolprovider/SymbolProvider-6c93ec45c8455992ee726d92df60316c8e731c44/src/SymbolProvider.cpp' $hostFlags

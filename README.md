@@ -4,7 +4,7 @@
 
 以 Minecraft Bedrock Dedicated Server 与 LeviLamina 为运行环境的原生 C++ 服务器工程。目标架构是一个薄加载插件 **EternalHost**、八个内部原生模块，以及面向开发者的 EternalSDK C/C++ 接口。Host 接触引擎；模块按业务职责拆分，通过版本化接口协作。
 
-Phase 1.5 工程化验收已完成：本地九个 DLL、23 组 Host 测试、17 组 SQLite 事务域测试及实际 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 已通过。本地产物与该云 Artifact 分别通过真实 BDS 两次启动、停用恢复、完整重启和终止清理。玩家资产 API 仍返回 UNSUPPORTED，七个业务模块仍为 PLANNED 并默认禁用；Phase 2 和完整生存玩法尚未实现。
+Phase 1.5 工程化验收已完成，原 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 和真实 BDS 记录保留。Phase 2 正在接入认证身份、权限、Capability、Money/Reputation、拒绝回执与审计；具体已验证范围见 [独立报告](docs/PHASE2_TEST_REPORT.md)。正式资产 feature bits 保持 0，七个业务模块仍为 PLANNED 并默认禁用；完整生存玩法尚未交付。
 
 | 入口 | 内容 |
 |---|---|
@@ -42,11 +42,11 @@ Host 只负责发现、依赖解析、ABI/能力检查、生命周期、Service 
 | EternalPresentation | UI、主题、HUD、MOTD、诗笺与粒子 |
 | EternalEncounters | Boss、战斗归因与奖励请求 |
 
-Core 当前是基础设施原型，资产 API 未开放；其余七项均为 **PLANNED / NOT IMPLEMENTED**，默认关闭。
+Core 当前提供 Phase 2 基础设施及开发验收入口，生产资产 API 尚未开放；其余七项均为 **PLANNED / NOT IMPLEMENTED**，默认关闭。
 
 ## SDK 与开发
 
-跨 DLL 使用 Stable C ABI，开发层提供 Modern C++ EternalSDK。API 1.0 与模块 ABI 1.0 是独立版本草案；结构携带版本与大小，能力须显式查询。边界不传递 STL 对象、异常或 SQLite 句柄，分配方负责释放。同步通信走 Service Registry，广播走 EventBus；禁止读取其他模块私有源码或数据库。
+跨 DLL 使用 Stable C ABI，开发层提供 Modern C++ EternalSDK。Module ABI 1.0、旧 Core API 1.0 和独立 Core API 1.1 分别版本化；结构携带版本与大小，能力须显式查询。边界不传递 STL 对象、异常或 SQLite 句柄，分配方负责释放。同步通信走 Service Registry，广播走 EventBus；禁止读取其他模块私有源码或数据库。
 
 新模块从 [标准模板](templates/EternalModule/README.md) 开始，只需阅读 [SDK](sdk/EternalSDK/README.md)、[MODULE_DEVELOPMENT](MODULE_DEVELOPMENT.md) 和 Example Module。优先扩展已有业务域，形成独立业务域才增加 DLL target。
 
@@ -54,7 +54,7 @@ Core 当前是基础设施原型，资产 API 未开放；其余七项均为 **P
 
 1. 单独准备合法取得的 BDS **1.26.51.1** 与 LeviLamina **26.51.6**；本仓库不分发它们。
 2. 从通过的 [Windows Actions 构建](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/workflows/build.yml) 下载 `EternalWorld-windows-x64` Artifact，校验 ZIP 对应的 `.sha256`，将 `Eternal/` 放入服务端 `plugins/`。
-3. 将 `config/modules.example.json` 复制为 `config/modules.json`。Core 必须启用，七个业务骨架保持关闭。配置、私有数据、日志和资源分别存放在对应目录。
+3. 将 `config/modules.example.json` 复制为 `config/modules.json`。Core 必须启用，七个业务骨架保持关闭。只有掌握经认证的服主稳定身份后才填写私人 `config/core/core.json`；空 Owner 示例不能用作活动配置。缺少 Core 配置时仅健康诊断，不自动选择首位玩家。开发验证和生产资产默认关闭。
 4. 启动后检查 `ecore status`、`ecore selfcheck`、`eternal status`、`ll list`；后者应只列出 Eternal。替换 DLL 前正常 `stop`，更新保留配置与数据。
 
 [部署工具](tools/Deploy-Host.ps1) 可复制本地构建，并仅在缺失时创建活动配置；[配置示例](config/modules.example.json) 不含运营者身份。

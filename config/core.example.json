@@ -1,0 +1,15 @@
+{
+  "ownerXuid": "",
+  "developmentValidation": false,
+  "validatedAssets": false,
+  "moduleCapabilities": {},
+  "roleDisplayNames": {
+    "Owner": "服主",
+    "Administrator": "总管",
+    "ContentManager": "内容管理员",
+    "EconomyManager": "钱庄管理员",
+    "Builder": "建造师",
+    "Moderator": "执法管理员",
+    "Player": "侠客"
+  }
+}

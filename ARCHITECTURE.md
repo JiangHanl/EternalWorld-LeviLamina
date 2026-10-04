@@ -70,7 +70,7 @@ Core SQLite 使用 WAL、FULL、外键和原子事务；coin 使用 int64 最小
 
 ```text
 host/EternalHost/             唯一 LL 适配插件
-modules/EternalCore/{api,domain}/
+modules/EternalCore/{api,domain,runtime}/
 modules/<其余七个模块>/        私有实现和模块入口
 sdk/EternalSDK/               九类公共契约、C++ 辅助头与验证
 sdk/EternalSDK/include/       标准 EternalSDK include 路径的转发头
@@ -82,3 +82,5 @@ server/                      私人运行目录，不提交
 ```
 
 目录存在、描述符可加载或 PLANNED 桩不代表业务功能实现。升级必须固定 BDS、LL 和工具链组合并重新验收；稳定自研 ABI 不能保证任意上游版本兼容。
+
+Phase 2 的 Core Runtime 从 Host 私有认证协议建立真实身份、会话和授权，事务继续复用已验证域。业务模块只访问 `EternalCore.Phase2Api` 专属绑定和公开 EventBus；所有 `core.native.*` 模块查询被拒绝。接口、数据和验收详见 [Phase 2 契约](docs/PHASE2_API.md) / [报告](docs/PHASE2_TEST_REPORT.md)。Host 没有迁入 Role、资产或事务业务。

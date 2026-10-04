@@ -1,5 +1,13 @@
 # 变更记录
 
+## Unreleased · Phase 2 实现与验收
+
+- 保留 Phase 1.5 源码与 CI 基线，创建本地保护标签；原历史报告不改写。
+- 新增编号 002 迁移、稳定身份与显示名版本、独立职司权限、账户版本、持久拒绝回执及有限审计、每消费者 Outbox 与恢复。
+- 保留旧 Core API 1.0 / Module ABI 1.0，新增独立 Core API 1.1 与 Host 私有认证接入协议；业务查询只返回绑定真实模块的专属上下文。
+- Host 薄适配层复制 BDS 已认证 Player 输入并渲染 Core 验证表单；不通过名字、表单字段或原生 OP 授权。
+- 新增 SDK、Runtime、Host bridge 与域回归；具体 PASS / NOT RUN 以 Phase 2 报告为准。生产资产继续关闭，未开始七个业务模块。
+
 ## Unreleased · Phase 1.5工程化验收完成
 
 - 转为一个EternalHost LL插件与八个内部原生模块，统一公开EternalSDK C/C++接口；完成模块握手、依赖/生命周期、服务注册、同步事件传输和构建/Artifact流程。

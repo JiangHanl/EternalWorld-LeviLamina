@@ -22,12 +22,14 @@ $coreHeader = 'sdk/EternalSDK/Core/core_abi.h'
 $moduleHeader = 'sdk/EternalSDK/Module/module_abi.h'
 $coreApi = (Read-VersionMacro $coreHeader 'EC_API_MAJOR')+'.'+(Read-VersionMacro $coreHeader 'EC_API_MINOR')
 $moduleAbi = (Read-VersionMacro $moduleHeader 'EM_ABI_MAJOR')+'.'+(Read-VersionMacro $moduleHeader 'EM_ABI_MINOR')
+$phase2Api = (Read-VersionMacro 'sdk/EternalSDK/Core/phase2_abi.h' 'EC_PHASE2_API_MAJOR')+'.'+(Read-VersionMacro 'sdk/EternalSDK/Core/phase2_abi.h' 'EC_PHASE2_API_MINOR')
 $buildInfoPath = Join-Path $projectRoot 'artifacts/packaging/build-info.json'
 New-Item -ItemType Directory -Path (Split-Path -Parent $buildInfoPath) -Force | Out-Null
 [pscustomobject]@{
     source_commit=$Commit.ToLowerInvariant()
     eternal_version=$metadata.version
     sdk_core_api=$coreApi
+    sdk_phase2_api=$phase2Api
     sdk_module_abi=$moduleAbi
     levilamina=$buildLock.levilamina
     bds=$buildLock.bds
@@ -42,6 +44,7 @@ $files = @(
     @{source='bin/Eternal/EternalHost.dll';entry='Eternal/EternalHost.dll'},
     @{source='packaging/Eternal/manifest.json';entry='Eternal/manifest.json'},
     @{source='config/modules.example.json';entry='Eternal/config/modules.example.json'},
+    @{source='config/core.example.json';entry='Eternal/config/core/core.example.json'},
     @{source='LICENSE';entry='Eternal/LICENSE'},
     @{source='NOTICE';entry='Eternal/NOTICE'},
     @{source='THIRD_PARTY_NOTICES.md';entry='Eternal/THIRD_PARTY_NOTICES.md'},

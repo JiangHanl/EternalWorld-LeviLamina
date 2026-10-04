@@ -97,6 +97,16 @@ bool HostMod::enable() {
             self_.getLogger().error("EternalHost enable failed: {}", error);
             return false;
         }
+        if (!native_) native_ = std::make_unique<LLAdapter>(host_, [this](uint32_t level, std::string_view message) {
+            if (level == EM_LOG_ERROR) self_.getLogger().error("{}", message);
+            else if (level == EM_LOG_WARNING) self_.getLogger().warn("{}", message);
+            else self_.getLogger().info("{}", message);
+        });
+        if (!native_->enable()) {
+            host_.disable(error);
+            self_.getLogger().error("EternalHost authenticated native ingress registration failed");
+            return false;
+        }
         auto& command = ll::command::CommandRegistrar::getServerInstance().getOrCreateCommand(
             "ecore", "永恒核心：服务健康检查", CommandPermissionLevel::Any);
         command.overload().text("status").execute([this](CommandOrigin const&, CommandOutput& output) {
@@ -121,11 +131,13 @@ bool HostMod::enable() {
         self_.getLogger().info("EternalHost enabled | ecore status / ecore selfcheck / eternal status");
         return true;
     } catch (const std::exception& error) {
+        if (native_) native_->disable();
         std::string ignored;
         host_.disable(ignored);
         self_.getLogger().error("EternalHost enable failed: {}", error.what());
         return false;
     } catch (...) {
+        if (native_) native_->disable();
         std::string ignored;
         host_.disable(ignored);
         return false;
@@ -134,6 +146,7 @@ bool HostMod::enable() {
 
 bool HostMod::disable() {
     try {
+        if (native_) native_->disable();
         if (!host_.onBoundThread() && ll::getGamingStatus() == ll::GamingStatus::Stopping) {
             // LL disables mods before leaveGameSync joins the server thread.
             // Keep the Host image resident and finish only after the OS handle

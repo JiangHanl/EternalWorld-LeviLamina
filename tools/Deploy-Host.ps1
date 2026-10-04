@@ -34,4 +34,7 @@ $example = Join-Path $projectRoot 'config/modules.example.json'
 Copy-Item -LiteralPath $example -Destination (Join-Path $target 'config/modules.example.json') -Force
 $configuration = Join-Path $target 'config/modules.json'
 if (-not (Test-Path -LiteralPath $configuration)) { Copy-Item -LiteralPath $example -Destination $configuration }
+$coreConfig = Join-Path $target 'config/core'
+New-Item -ItemType Directory -Path $coreConfig -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'config/core.example.json') -Destination (Join-Path $coreConfig 'core.example.json') -Force
 Write-Output 'Deployed EternalHost and internal modules; existing configuration was preserved. No server startup was performed.'

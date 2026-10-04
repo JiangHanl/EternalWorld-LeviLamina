@@ -5,12 +5,14 @@ Push-Location -LiteralPath $projectRoot
 try {
     & $Python 'sdk/EternalSDK/tests/validate_sdk.py' '--clang' '.deps/LLVM22/bin/clang.exe'
     if ($LASTEXITCODE -ne 0) { throw 'Public SDK contract/layout checks failed' }
-    foreach ($language in @('c','c++')) {
-        $standard = if ($language -eq 'c') { 'c11' } else { 'c++20' }
-        & '.deps/LLVM22/bin/clang.exe' '--target=x86_64-pc-windows-msvc' '-ffreestanding' '-fsyntax-only' '-Wall' '-Wextra' '-Werror' '-x' $language ('-std='+$standard) 'sdk/EternalSDK/tests/module_abi_layout.c'
-        if ($LASTEXITCODE -ne 0) { throw "Module SDK layout checks failed: $language" }
+    foreach ($probe in @('module_abi_layout.c','phase2_abi_layout.c','native_ingress_layout.c')) {
+        foreach ($language in @('c','c++')) {
+            $standard = if ($language -eq 'c') { 'c11' } else { 'c++20' }
+            & '.deps/LLVM22/bin/clang.exe' '--target=x86_64-pc-windows-msvc' '-ffreestanding' '-fsyntax-only' '-Wall' '-Wextra' '-Werror' '-x' $language ('-std='+$standard) ('sdk/EternalSDK/tests/'+$probe)
+            if ($LASTEXITCODE -ne 0) { throw "SDK layout checks failed: $probe ($language)" }
+        }
     }
-    foreach ($name in @('CoreDomainTests','CoreApiTests','HostRuntimeTests','EternalExampleContracts','ConfigTests','SDKCppTests')) {
+    foreach ($name in @('CoreDomainTests','Phase2DomainTests','Phase2RuntimeTests','CoreApiTests','HostRuntimeTests','Phase2NativeBridgeTests','EternalExampleContracts','ConfigTests','SDKCppTests','Phase2ClientContracts')) {
         & $Xmake 'build' $name
         if ($LASTEXITCODE -ne 0) { throw "Test build failed: $name" }
         & (Join-Path $projectRoot ('bin/tests/'+$name+'.exe'))

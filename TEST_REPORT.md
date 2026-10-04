@@ -2,6 +2,8 @@
 
 更新：2026-10-04。PASS仅用于真实已执行结果；PLANNED、NOT RUN、BLOCKED与失败必须保留。
 
+当前 Phase 2 的实现、云构建和真实客户端验收单独记录在 [Phase 2 报告](docs/PHASE2_TEST_REPORT.md)。以下 Phase 1 / 1.5 历史记录不改写、不移用为新 DLL 的通过结论。
+
 ## 已验证的Phase1历史基线
 
 | 检查 | 类型 | 结果 |

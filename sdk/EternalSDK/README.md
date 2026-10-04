@@ -1,4 +1,4 @@
-# EternalSDK 0.1.0 / C ABI 1.0
+# EternalSDK / Module ABI 1.0 / Core API 1.0 + 1.1
 
 SDK 是编译期头文件与本模块内 C++ 辅助，不是运行时插件，不加载 LL、脚本引擎或数据库。EternalHost 是唯一交给 LeviLamina 加载的 DLL；Host 按配置加载八个内部模块。内部模块只使用 SDK 公共接口，不能包含 Host/其他模块私有源码。
 
@@ -31,3 +31,5 @@ python sdk/EternalSDK/tests/validate_sdk.py --clang <clang-path>
 静态测试验证 C11/C++20 布局和公开边界，不加载 DLL。HostRuntimeTests 验证 mock 生命周期/注册/事件故障；ModuleArtifactTests 验证真实模块 DLL；真实 LL 启动、命令和停服另行验收。任何一层不能代替下一层。
 
 LL 适配 DLL 须采用匹配版本的官方 `linkrule`、`prelink` 与静态 [SymbolProvider](https://github.com/LiteLDev/SymbolProvider/blob/6c93ec45c8455992ee726d92df60316c8e731c44/src/SymbolProvider.cpp)。SDK-only 内部模块不调用 Bedrock 私有符号，不需要复制 LL NativeMod 注册、内存覆盖或假 `bedrock_runtime.dll`。
+
+Phase 2 的独立 `EternalCore.Phase2Api` 保留旧前缀并增加版本化 DTO，详见 [契约](../../docs/PHASE2_API.md)。模块查询取得 Core 专属上下文，`core.native.*` 不向模块开放。公开服务的生产 feature bits 当前仍为 0；测试专属私有 C++ hooks 不在 SDK 或正式 DLL 中。

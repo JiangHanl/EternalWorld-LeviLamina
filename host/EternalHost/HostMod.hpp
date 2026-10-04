@@ -1,6 +1,7 @@
 #pragma once
 #include "ll/api/mod/NativeMod.h"
 #include "runtime/Host.hpp"
+#include "native/LLAdapter.hpp"
 #include <atomic>
 
 namespace eternal::adapter {
@@ -15,6 +16,7 @@ public:
 private:
     ll::mod::NativeMod& self_;
     eternal::host::Host host_;
+    std::unique_ptr<LLAdapter> native_;
     bool firstEnableThreadBound_ = false;
     std::atomic_bool stopDeferred_ = false;
 };

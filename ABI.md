@@ -33,3 +33,5 @@ Unload 后不得使用已复制的上下文字段或 instance 调用 Host。当�
 唯一最终例外是终止停服。Host保存服务器线程的Windows SYNCHRONIZE句柄，仅WaitForSingleObject(handle, 0)确认线程已退出后，才可在关闭线程执行最终Disable/Unload；之后永久禁止Load/Enable。模块必须允许此最终清理在关闭线程释放私有资源，但不得访问已退出的游戏线程对象。普通Disable仍受原线程限制；Stopping标志只用于延后关闭请求，不能代替线程退出证明。适配层在typed leaveGameSync的origin返回后再调用终止检查。这是Host私有适配接口，未更改公共SDK布局或授予模块换线能力；新路径的mock验证不等同真实BDS停服通过。
 
 验证分为 C11 与 C++20 头/布局编译、真实 DLL 导出和调用、版本/结构大小错误测试、停用/卸载和完整 BDS 重启。任一层通过都不能代替其他层。便携 MinGW 只用于无 LL 的域/契约测试，不用于最终 LL Host DLL。
+
+Phase 2 保留上述旧布局，新增独立 Core API 1.1：240 字节表、显式完整 DTO size/version、Core 专属调用上下文和请求/回执/事件结构。128 字节 native ingress 属于 Host 私有协议，模块查询路径禁止访问；它不是业务 SDK 的认证入口。详见 [契约](docs/PHASE2_API.md) 和权威 [头文件](sdk/EternalSDK/Core/phase2_abi.h)。合成测试专属的私有 C++ hooks 不在 SDK、运行配置、正式 DLL 或服务表中。

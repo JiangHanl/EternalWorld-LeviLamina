@@ -1,8 +1,10 @@
 #include "Host.hpp"
+#include "EternalSDK/Core/native_ingress_abi.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <limits>
+#include <optional>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -90,6 +92,11 @@ public:
 struct Host::Impl {
     enum class Phase { Bound, Loaded, Enabling, Enabled, Disabling, Disabled, Unloading, Quarantined, Unloaded };
     struct Dependency { std::string id; EmSemVer minimum{}; uint64_t caps{}; bool optional{}; };
+    struct NativeBinding {
+        const EcNativeIngressApi* ingress{};
+        uint64_t provider_generation{},module_generation{},capabilities{};
+        EcNativeModuleBindingResult result{};
+    };
     struct Node {
         Impl* host{};
         ModuleSnapshot report;
@@ -103,6 +110,8 @@ struct Host::Impl {
         Phase phase{Phase::Bound};
         bool load_attempted{};
         bool required{};
+        uint64_t generation{};
+        std::optional<NativeBinding> binding;
     };
     struct Service { Node* owner{}; EmServiceOffer offer{}; std::string id; uint64_t generation{}; };
     struct Subscription { Node* owner{}; std::string topic; EmEventCallback callback{}; void* user{}; };
@@ -141,7 +150,7 @@ struct Host::Impl {
             if(n->phase!=Phase::Enabling)return EM_NOT_READY;
             if(!header(offer)||!valid(offer->id,128)||!identifier(view(offer->id))||!offer->api_major||!offer->table||!offer->table_size||offer->table_size>65536||offer->reserved)return EM_INVALID_ARGUMENT;
             std::string id(view(offer->id));
-            const bool own=id.starts_with(n->report.id+".") || (n->report.id==EM_CORE_MODULE_ID && id==EM_CORE_SERVICE_ID);
+            const bool own=id.starts_with(n->report.id+".") || (n->report.id==EM_CORE_MODULE_ID && (id==EM_CORE_SERVICE_ID || id==EC_PHASE2_SERVICE_ID));
             if(!own)return EM_CONFLICT;
             if(h.services.contains(id))return EM_CONFLICT;
             auto count=std::count_if(h.services.begin(),h.services.end(),[&](auto& x){return x.second.owner==n;});
@@ -160,13 +169,116 @@ struct Host::Impl {
         if((request->required_capabilities&s.offer.capabilities)!=request->required_capabilities)return EM_UNSUPPORTED;
         *out={sizeof(*out),EM_STRUCT_VERSION,s.offer.table,s.offer.table_size,s.offer.api_major,s.offer.api_minor,0,s.offer.capabilities,s.generation};return EM_OK;
     }
+    static bool nonzero(EcId128 id) { return id.low || id.high; }
+    static bool equal(EcId128 a,EcId128 b) { return a.low==b.low && a.high==b.high; }
+    static EmStatus nativeStatus(EcStatus status) {
+        switch(status) {
+        case EC_OK:return EM_OK;
+        case EC_INVALID_ARGUMENT:case EC_INVALID_UTF8:return EM_INVALID_ARGUMENT;
+        case EC_ABI_MISMATCH:return EM_ABI_MISMATCH;
+        case EC_NOT_READY:return EM_NOT_READY;
+        case EC_NOT_FOUND:return EM_NOT_FOUND;
+        case EC_UNSUPPORTED:return EM_UNSUPPORTED;
+        case EC_LIMIT_EXCEEDED:return EM_LIMIT_EXCEEDED;
+        case EC_WRONG_THREAD:return EM_WRONG_THREAD;
+        case EC_DENIED:case EC_EXPIRED:case EC_REVOKED:case EC_CONFLICT:return EM_CONFLICT;
+        default:return EM_INTERNAL_ERROR;
+        }
+    }
+    EmStatus ingress(const EcNativeIngressApi*& table) {
+        EmServiceRequest request{sizeof(request),EM_STRUCT_VERSION,
+            {EC_NATIVE_INGRESS_SERVICE_ID,sizeof(EC_NATIVE_INGRESS_SERVICE_ID)-1,0},
+            EC_NATIVE_INGRESS_MAJOR,EC_NATIVE_INGRESS_MINOR,0,0};
+        EmServiceReference reference{};
+        reference.struct_size=sizeof(reference);reference.struct_version=EM_STRUCT_VERSION;
+        const auto found=query(&request,&reference);
+        if(found!=EM_OK)return found;
+        const auto service=services.find(EC_NATIVE_INGRESS_SERVICE_ID);
+        if(service==services.end() || service->second.owner->report.id!=EM_CORE_MODULE_ID ||
+           reference.table_size<sizeof(EcNativeIngressApi))return EM_ABI_MISMATCH;
+        const auto* api=static_cast<const EcNativeIngressApi*>(reference.table);
+        if(api->struct_size!=sizeof(*api) || api->struct_version!=EC_NATIVE_INGRESS_STRUCT_VERSION ||
+           api->api_major!=EC_NATIVE_INGRESS_MAJOR || !nonzero(api->bridge_nonce) || !api->instance_epoch ||
+           !api->bind_module || !api->revoke_module ||
+           std::any_of(std::begin(api->reserved),std::end(api->reserved),[](auto v){return v!=0;}))return EM_ABI_MISMATCH;
+        table=api;return EM_OK;
+    }
+    EmStatus scopedQuery(Node& n,const EmServiceRequest* request,EmServiceReference* out) {
+        if(!header(out))return EM_INVALID_ARGUMENT;
+        *out={sizeof(*out),EM_STRUCT_VERSION,nullptr,0,0,0,0,0,0};
+        const auto declared=std::find_if(n.dependencies.begin(),n.dependencies.end(),[](const auto& d){return d.id==EM_CORE_MODULE_ID;});
+        if(declared==n.dependencies.end())return EM_CONFLICT;
+        if((request->required_capabilities&~EC_MODULE_CAP_ALL) ||
+           (request->required_capabilities&declared->caps)!=request->required_capabilities)return EM_UNSUPPORTED;
+        EmServiceReference provider{};
+        provider.struct_size=sizeof(provider);provider.struct_version=EM_STRUCT_VERSION;
+        const auto found=query(request,&provider);
+        if(found!=EM_OK)return found;
+        const auto service=services.find(EC_PHASE2_SERVICE_ID);
+        if(service==services.end() || service->second.owner->report.id!=EM_CORE_MODULE_ID ||
+           provider.api_major!=EC_PHASE2_API_MAJOR || provider.api_minor<EC_PHASE2_API_MINOR)return EM_ABI_MISMATCH;
+        const auto requested=request->required_capabilities&declared->caps;
+        if(n.binding && n.binding->provider_generation==provider.generation &&
+           n.binding->module_generation==n.generation) {
+            // A binding is immutable for this Enable generation. The consumer
+            // requests its full declared capability set on first discovery.
+            if((requested&n.binding->capabilities)!=requested)return EM_UNSUPPORTED;
+        } else {
+            n.binding.reset();
+            const EcNativeIngressApi* native{};
+            const auto available=ingress(native);
+            if(available!=EM_OK)return available;
+            EcNativeModuleBindingRequest binding{};
+            binding.struct_size=sizeof(binding);binding.struct_version=EC_NATIVE_INGRESS_STRUCT_VERSION;
+            binding.module_id={n.report.id.data(),static_cast<uint32_t>(n.report.id.size()),0};
+            binding.module_generation=n.generation;
+            binding.approved_module_capabilities=requested;
+            // Protocol upper bounds only: not authorization or a Host asset policy.
+            // Core independently intersects its private default-deny policy and
+            // finite module budgets. No permissions are derived from player roles.
+            binding.approved_permissions=EC_P2_PERMISSION_ALL;
+            binding.money_limit_per_request=binding.reputation_limit_per_request=INT64_MAX;
+            binding.money_budget_per_period=binding.reputation_budget_per_period=INT64_MAX;
+            binding.budget_period_ms=60000;
+            EcNativeModuleBindingResult result{};
+            result.struct_size=sizeof(result);result.struct_version=EC_NATIVE_INGRESS_STRUCT_VERSION;
+            const auto status=native->bind_module(native->bridge_nonce,&binding,&result);
+            if(status!=EC_OK)return nativeStatus(status);
+            const auto* api=result.scoped_api;
+            const bool good=result.struct_size==sizeof(result) && result.struct_version==EC_NATIVE_INGRESS_STRUCT_VERSION &&
+                !result.reserved0 && !result.reserved1 && result.table_size>=sizeof(EternalCorePhase2Api) && api &&
+                nonzero(result.caller_context) && result.caller_generation && result.instance_epoch==native->instance_epoch &&
+                api->v1_0.struct_size==sizeof(EternalCoreApi) && api->v1_0.api_major==EC_API_MAJOR &&
+                api->struct_size==sizeof(*api) && api->struct_version==EC_PHASE2_STRUCT_VERSION &&
+                api->api_major==EC_PHASE2_API_MAJOR && api->api_minor>=EC_PHASE2_API_MINOR &&
+                equal(api->caller_context,result.caller_context) && api->caller_generation==result.caller_generation &&
+                api->instance_epoch==result.instance_epoch;
+            if(!good) {
+                if(nonzero(result.caller_context) && result.caller_generation) {
+                    constexpr char reason[]="Host refused malformed scoped API";
+                    EcNativeModuleRevokeRequest revoke{sizeof(revoke),EC_NATIVE_INGRESS_STRUCT_VERSION,result.caller_context,result.caller_generation,{reason,sizeof(reason)-1,0},0};
+                    native->revoke_module(native->bridge_nonce,&revoke);
+                }
+                return EM_ABI_MISMATCH;
+            }
+            n.binding=NativeBinding{native,provider.generation,n.generation,requested,result};
+        }
+        const auto& cached=*n.binding;
+        *out={sizeof(*out),EM_STRUCT_VERSION,cached.result.scoped_api,cached.result.table_size,
+              EC_PHASE2_API_MAJOR,EC_PHASE2_API_MINOR,0,cached.capabilities,provider.generation};
+        return EM_OK;
+    }
     static EmStatus EM_CALL queryService(void* p,const EmServiceRequest* request,EmServiceReference* out) noexcept {
         try {auto* n=caller(p);if(!n)return EM_INVALID_ARGUMENT;if(!n->host->onThread())return EM_WRONG_THREAD;
             if(!n->host->callable(*n))return EM_NOT_READY;
             if(!header(request)||!valid(request->id,128))return EM_INVALID_ARGUMENT;
+            // The native bridge nonce is never a module-origin discovery service,
+            // including for Core's own EmHostContext. Trusted Host C++ query remains.
+            if(view(request->id).starts_with("core.native."))return EM_CONFLICT;
             auto service=n->host->services.find(std::string(view(request->id)));
             if(service!=n->host->services.end() && service->second.owner!=n &&
                std::none_of(n->dependencies.begin(),n->dependencies.end(),[&](const auto& d){return d.id==service->second.owner->report.id;}))return EM_CONFLICT;
+            if(view(request->id)==EC_PHASE2_SERVICE_ID)return n->host->scopedQuery(*n,request,out);
             return n->host->query(request,out);
         }catch(...){return EM_INTERNAL_ERROR;}
     }
@@ -210,9 +322,26 @@ struct Host::Impl {
             return h.dispatch(event);
         }catch(...){return EM_INTERNAL_ERROR;}
     }
-    void revoke(Node& n) {
+    bool revokeBinding(Node& n) {
+        if(!n.binding)return true;
+        const auto binding=*n.binding;n.binding.reset();
+        const auto provider=services.find(EC_PHASE2_SERVICE_ID);
+        if(provider==services.end() || provider->second.generation!=binding.provider_generation)
+            return true; // Provider already revoked; never call a stale DLL table.
+        constexpr char reason[]="Host module Disable";
+        EcNativeModuleRevokeRequest request{sizeof(request),EC_NATIVE_INGRESS_STRUCT_VERSION,
+            binding.result.caller_context,binding.result.caller_generation,{reason,sizeof(reason)-1,0},0};
+        const auto result=binding.ingress->revoke_module(binding.ingress->bridge_nonce,&request);
+        return result==EC_OK || result==EC_REVOKED || result==EC_NOT_FOUND;
+    }
+    bool revoke(Node& n) {
+        bool ok=true;
+        if(n.report.id==EM_CORE_MODULE_ID) {
+            for(auto& consumer:nodes)if(!revokeBinding(*consumer))ok=false;
+        } else ok=revokeBinding(n);
         std::erase_if(services,[&](const auto& x){return x.second.owner==&n;});
         std::erase_if(subscriptions,[&](const auto& x){return x.second.owner==&n;});
+        return ok;
     }
     void quarantine(Node& n,std::string reason) {
         if(n.phase==Phase::Quarantined)return;
@@ -224,7 +353,8 @@ struct Host::Impl {
     }
     bool stop(Node& n,std::string& error) {
         if(n.phase==Phase::Quarantined)return false;
-        revoke(n);n.phase=Phase::Disabling;
+        if(!revoke(n)) {error=n.report.id+": native binding revoke failed";quarantine(n,error);return false;}
+        n.phase=Phase::Disabling;
         auto status=n.disable();
         if(status!=EM_OK){error=n.report.id+": Disable failed ("+std::to_string(status)+")";quarantine(n,error);return false;}
         n.phase=Phase::Disabled;n.report.state=ModuleState::Disabled;return true;
@@ -369,7 +499,9 @@ bool Host::enable(std::string& error) {
     h.busy=true;struct Busy { bool& b;~Busy(){b=false;} } busy{h.busy};
     for(auto* n:h.order){if(n->phase==Impl::Phase::Unloaded)continue;std::string failure;
         for(const auto& dep:n->dependencies)if(!dep.optional){auto provider=std::find_if(h.order.begin(),h.order.end(),[&](auto* p){return p->report.id==dep.id;});if(provider==h.order.end()||(*provider)->phase!=Impl::Phase::Enabled){failure="dependency Enable failed: "+dep.id;break;}}
-        EmStatus result=EM_OK;if(failure.empty()){n->phase=Impl::Phase::Enabling;result=n->enable();if(result!=EM_OK)failure="Enable failed ("+std::to_string(result)+")";}
+        EmStatus result=EM_OK;if(failure.empty()){
+            if(h.serial==UINT64_MAX)failure="Module generation exhausted";
+            else {n->generation=++h.serial;n->phase=Impl::Phase::Enabling;result=n->enable();if(result!=EM_OK)failure="Enable failed ("+std::to_string(result)+")";}}
         if(!failure.empty()){if(!n->required){std::string cleanup;if(h.reject(*n,failure,cleanup))continue;error=cleanup;}
             else error=n->report.id+": "+failure;
             for(auto i=h.order.rbegin();i!=h.order.rend();++i)if((*i)->phase==Impl::Phase::Enabled||(*i)->phase==Impl::Phase::Enabling){std::string cleanup;if(!h.stop(**i,cleanup)&&!cleanup.empty())error+="; "+cleanup;}return false;}

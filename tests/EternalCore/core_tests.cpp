@@ -547,8 +547,8 @@ int main(int argc, char **argv) {
             require(db.query("SELECT balance FROM accounts WHERE asset='coin' AND "
                              "uuid='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'") == "77",
                     "Backup lost WAL state");
-            require(db.query("PRAGMA user_version") == "1" &&
-                        db.query("SELECT count(*) FROM schema_migration") == "1",
+            require(db.query("PRAGMA user_version") == std::to_string(detail::schemaVersion) &&
+                        db.query("SELECT count(*) FROM schema_migration") == std::to_string(detail::schemaVersion),
                     "Migration metadata missing");
             ReadDb source(file);
             require(source.query("PRAGMA journal_mode") == "wal" &&
@@ -566,7 +566,7 @@ int main(int argc, char **argv) {
             Core reopened(file.string(), ownerXuid);
             require(migrationBackups(file).empty(), "Current schema reopen added a backup");
             ReadDb db(file);
-            require(db.query("PRAGMA user_version") == "1" &&
+            require(db.query("PRAGMA user_version") == std::to_string(detail::schemaVersion) &&
                         db.query("PRAGMA integrity_check") == "ok" &&
                         db.query("PRAGMA foreign_key_check").empty(),
                     "First schema transaction failed");

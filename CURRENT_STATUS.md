@@ -1,6 +1,8 @@
 # 当前状态
 
-更新：2026-10-04。Phase1.5工程化验收已完成：一个EternalHost LL插件、八个内部DLL、EternalSDK C/C++接口、Windows云CI与其产物的真实BDS复验通过。Phase2尚未开始，架构文档不是已完成业务清单；最终文档提交与公开树审查继续按发布流程执行。
+更新：2026-10-04。Phase 2 实现与验收进行中，范围为 Core 认证身份、权限、Capability、Money/Reputation、事务、审计、回执与 Outbox。详细当前结果以 [Phase 2 独立报告](docs/PHASE2_TEST_REPORT.md) 为准。正式资产能力保持关闭，七个业务模块保持 PLANNED / disabled；不会自动进入 Phase 3。
+
+下表及其后段落是保留的 Phase 1.5 历史范围；本阶段的新源码、DLL 和真实玩家结果单独验证，不能继承其通过结论。
 
 | 范围 | 已知结果 |
 |---|---|

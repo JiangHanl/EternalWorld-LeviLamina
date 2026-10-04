@@ -16,9 +16,9 @@
 | outbox/pending_receipt | 已提交资产的投影事件与待确认回执，不是半笔资产事务 |
 | schema_migration | 有序版本、SQL checksum、应用时间 |
 
-内部执行域固定为 core.domain.v1，UNIQUE(executorScope, actorUuid, idempotencyKey)。经过身份校验后只查询该主体作用域回执。金额/原因/操作等 canonical payload 不同则拒绝复用；合法 UTF-8 与整数溢出在提交前校验。
+旧内部执行域保留 core.domain.v1，Phase 2 注册模块使用 Core 从真实 moduleId 派生的作用域；UNIQUE(executorScope, actorUuid, idempotencyKey)。经过身份校验后只查询该主体和模块作用域回执。金额/原因/操作等 canonical payload 不同则拒绝复用；合法 UTF-8 与整数溢出在提交前校验。
 
-现只成功交易形成 committed 记录。拒绝请求无正式持久回执，邮件、资产能力票据、queued/failed 工作流和原生投影 worker 尚未完成，不能把这些最终设计概念写成已实现表。
+Phase 2 编号 002 迁移增加稳定 PlayerId、显示名、时间、身份/权限版本、账户 revision、扩展 Role、committed/rejected 事务、请求来源审计、有限拒绝审计聚合及每消费者 Outbox 状态。旧 001 校验保留。高价值拒绝形成 rejected 回执，钱包/账本/成功事件保持不变；同 key 冲突不覆盖原回执。规范化请求的回执保存完成时间与当次账户/权限快照，后续余额变化或重启不能改变历史结果。邮件、物品 exactly-once、业务排队和实物核验仍未实现。
 
 ## 其他模块私有数据规划
 

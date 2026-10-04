@@ -4,7 +4,7 @@
 
 A native C++ server project for Minecraft Bedrock Dedicated Server and LeviLamina. The target architecture has one thin loader, **EternalHost**, eight internal native modules, and an EternalSDK exposing a versioned C ABI with C++ helpers. Only the Host integrates with the engine; modules own separate business responsibilities and communicate through published interfaces.
 
-Phase 1.5 engineering acceptance is complete: local builds of nine DLLs, 23 Host test groups, 17 SQLite domain test groups and the actual [Windows CI run](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) passed. Local products and that cloud artifact separately passed two real BDS runs, disable/enable, full restart and terminal cleanup. Asset APIs still return UNSUPPORTED; seven business modules remain PLANNED and disabled by default. Phase 2 and complete survival gameplay are not implemented.
+Phase 1.5 engineering acceptance is complete; its [Windows CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) and real BDS records are preserved. Phase 2 now implements authenticated identity, permissions, capabilities, Money/Reputation, durable rejection receipts and audit. See the [separate report](docs/PHASE2_TEST_REPORT.md) for verified scope. Production asset feature bits remain zero; seven business modules remain PLANNED and disabled. Complete survival gameplay has not been delivered.
 
 - [Status](CURRENT_STATUS.md) and [test report](TEST_REPORT.md): verified scope and missing work.
 - [Architecture](ARCHITECTURE.md), [build](BUILD.md) and [dependencies](DEPENDENCY.md): boundaries and pinned toolchain.
@@ -39,11 +39,11 @@ Host handles discovery, dependency resolution, ABI/capability checks, lifecycle,
 | EternalPresentation | UI, themes, HUD, MOTD, poetry and particles |
 | EternalEncounters | Bosses, combat attribution and reward requests |
 
-Core is an infrastructure prototype with asset APIs disabled. All seven business modules are **PLANNED / NOT IMPLEMENTED** and disabled by default.
+Core provides Phase 2 infrastructure and development acceptance entry points; production asset APIs remain gated. All seven business modules are **PLANNED / NOT IMPLEMENTED** and disabled by default.
 
 ## SDK and development
 
-DLL boundaries use a Stable C ABI; development uses modern C++ EternalSDK. API 1.0 and module ABI 1.0 are independent drafts. Structures carry size and version; capabilities are queried explicitly. No STL objects, exceptions or SQLite handles cross this boundary. Allocators own corresponding deallocation. Use Service Registry for synchronous calls and EventBus for broadcasts, never another module's private source or database.
+DLL boundaries use a Stable C ABI; development uses modern C++ EternalSDK. Module ABI 1.0, legacy Core API 1.0 and the independent Core API 1.1 are versioned separately. Structures carry size and version; capabilities are queried explicitly. No STL objects, exceptions or SQLite handles cross this boundary. Allocators own corresponding deallocation. Use Service Registry for synchronous calls and EventBus for broadcasts, never another module's private source or database.
 
 Start with the [template](templates/EternalModule/README.md), [SDK](sdk/EternalSDK/README.md), [MODULE_DEVELOPMENT](MODULE_DEVELOPMENT.md) and Example Module. Extend an existing domain first; add a DLL target only for a distinct business domain.
 
@@ -51,7 +51,7 @@ Start with the [template](templates/EternalModule/README.md), [SDK](sdk/EternalS
 
 1. Obtain BDS **1.26.51.1** and LeviLamina **26.51.6** separately under their own terms.
 2. Download `EternalWorld-windows-x64` from a successful [Windows Actions build](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/workflows/build.yml). Verify the ZIP against its `.sha256`, then place `Eternal/` inside `plugins/`.
-3. Copy `config/modules.example.json` to `config/modules.json`. Core is mandatory; keep the seven skeleton modules disabled. Configuration, private data, logs and resources have separate directories.
+3. Copy `config/modules.example.json` to `config/modules.json`. Core is mandatory; keep the seven skeleton modules disabled. Fill private `config/core/core.json` only with a verified stable Owner identity. The empty Owner example is not an active configuration. Missing Core configuration allows health diagnostics only and never makes the first player Owner. Development validation and production assets default to disabled.
 4. Verify `ecore status`, `ecore selfcheck`, `eternal status` and `ll list`; the latter should list only Eternal. Stop gracefully before replacing DLLs. Preserve existing configuration and data.
 
 The [deployment helper](tools/Deploy-Host.ps1) copies local products and initializes active configuration only when missing. The [example](config/modules.example.json) contains no operator identity.

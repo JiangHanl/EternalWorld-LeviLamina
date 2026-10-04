@@ -37,9 +37,20 @@ assert methods == ['get_version', 'get_features', 'read_identity', 'read_coin', 
 result = {'staticSourceChecks': True, 'declaredStructLayouts': len(expected_sizes),
           'phase1FeatureBits': 0, 'minorUnitsPerLiang': 100,
           'c11Compiled': False, 'cpp20Compiled': False, 'dllLoaded': False, 'bdsStarted': False}
+for phase_header in [base / 'Core' / 'phase2_abi.h', base / 'Core' / 'native_ingress_abi.h']:
+    phase_source = phase_header.read_text(encoding='utf-8')
+    phase_code = re.sub(r'/\*.*?\*/|//[^\n]*', '', phase_source, flags=re.S)
+    for forbidden in ('std::', 'std::function', 'std::string', 'throw ', 'new ', 'delete ', 'sqlite3', 'nlohmann'):
+        assert forbidden not in phase_code, 'Forbidden Phase2 boundary: ' + forbidden
+    assert re.findall(r'#include\s+[<"]([^>"]+)[>"]', phase_code) in [['core_abi.h'], ['phase2_abi.h']]
+phase_code = (base / 'Core' / 'phase2_abi.h').read_text(encoding='utf-8')
+assert '#define EC_PHASE2_PRODUCTION_FEATURES UINT64_C(0)' in phase_code
+assert 'EternalCoreApi v1_0;' in phase_code
+result['phase2SourceChecks'] = True
 if args.clang:
     assert args.clang.is_file(), 'Clang executable not found'
-    for probe in [base / 'tests' / 'abi_layout.c', base / 'tests' / 'module_abi_layout.c']:
+    for probe in [base / 'tests' / 'abi_layout.c', base / 'tests' / 'module_abi_layout.c',
+                  base / 'tests' / 'phase2_abi_layout.c', base / 'tests' / 'native_ingress_layout.c']:
         for language, standard, key in [('c', 'c11', 'c11Compiled'), ('c++', 'c++20', 'cpp20Compiled')]:
             command = [str(args.clang), '--target=x86_64-pc-windows-msvc', '-ffreestanding',
                        '-fsyntax-only', '-Wall', '-Wextra', '-Werror', '-x', language,
@@ -49,4 +60,5 @@ if args.clang:
                 raise RuntimeError(str(probe) + ' ' + language + ' ABI compile failed:\n' + run.stdout + run.stderr)
             result[key] = True
     result['moduleAbiLayoutsCompiled'] = True
+    result['phase2AndNativeLayoutsCompiled'] = True
 print(json.dumps(result))
