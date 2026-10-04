@@ -1,6 +1,6 @@
 # 公共 API
 
-EternalSDK 提供 C ABI 和 C++ 辅助接口。真实导出与结构定义以 sdk/EternalSDK 的公共头为准；sdk/EternalSDK/include 提供标准 EternalSDK include 路径的转发头。模块内部 Core.hpp 不是第三方业务 API。Phase 2 新增独立 Core 1.1 服务，详见 [Phase 2 契约](docs/PHASE2_API.md)。原 96 字节 API 1.0 和 Module ABI 1.0 保持不变。正式资产能力仍关闭，不能继承 Phase 1.5 的玩家验收结论。
+EternalSDK 提供 C ABI 和 C++ 辅助接口。真实导出与结构定义以 sdk/EternalSDK 的公共头为准；sdk/EternalSDK/include 提供标准 EternalSDK include 路径的转发头。模块内部 Core.hpp 不是第三方业务 API。Phase 2 新增独立 Core 1.2 服务，详见 [Phase 2 契约](docs/PHASE2_API.md)。原 96 字节 API 1.0、Module ABI 1.0 与完整 Core 1.1 前缀保持不变。正式资产能力仍关闭，不能继承 Phase 1.5 的玩家验收结论。
 
 | 层 | 接口用途 | 安全边界 |
 |---|---|---|

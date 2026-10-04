@@ -43,6 +43,17 @@
 
 “执行测试”会尝试增加一两，再次核验当前主体、会话、权限和账户版本。取消不交易。等待超过 60 秒后点击，应拒绝并保留高价值拒绝回执，钱包/账本不变。运营者也可在页面仍打开时从真正控制台停用/启用 Eternal，旧页面随后必须被拒绝。
 
+## 公开 SDK 调用链
+
+由运营者在此测试服临时安装单独云 Artifact 中的 `CoreValidationModule`，并只给它批准所需 Core 模块能力。它只包含 SDK 和标准库，不读取 Core 私有文件；七个业务模块仍关闭。以下是预定步骤，执行结果须另记：
+
+```text
+/ecore native invoke core-validation check eeeeeeeeeeeeeeeeeeeeeeeeeeeeee20
+/ecore native invoke core-validation check eeeeeeeeeeeeeeeeeeeeeeeeeeeeee20
+```
+
+此验证模块的 key 使用非零、32 位小写十六进制；原生诊断命令的文字 key 格式不受此限制。回调从真实认证玩家 Invocation 申请限定票据，通过公共服务查询身份/角色/权限/资产，固定增加 100 分（1 两），查询持久回执和 Outbox。第二次相同 key 必须复用原回执。开发客户端明确 opt-in，但 Core 私人开关和真实票据仍必须同时满足；默认生产客户端保持 Unsupported。重启后再执行相同 key 不再次发放。验证结束停服后撤下此测试模块，正式 Eternal 包只包含 Host 和八个模块。
+
 ## 普通玩家与撤权
 
 需要第二个实际认证账号。先验证 Player 默认无管理权限；再由服主授予 EconomyManager，确认对应操作允许；玩家打开验证页面后，服主撤销职司，旧页面点击必须 DENIED。重连权限保持撤销。原生 OP 的赋予与移除不能自动更改 Eternal 职司。

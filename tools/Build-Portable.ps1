@@ -13,6 +13,7 @@ foreach ($buildInput in @('host/EternalHost/HostMod.cpp','host/EternalHost/runti
 New-Item -ItemType Directory -Path $output,(Join-Path $output 'modules'),$build -Force | Out-Null
 $sources = @((Get-ChildItem -LiteralPath (Join-Path $projectRoot 'host'),(Join-Path $projectRoot 'modules'),(Join-Path $projectRoot 'sdk/EternalSDK') -Recurse -File | Where-Object { $_.Extension -in @('.c','.cpp','.hpp','.h') }).FullName)
 $sources += @($PSCommandPath,(Join-Path $PSScriptRoot 'NativeToolchain.ps1'))
+$sources += (Join-Path $projectRoot 'tests/Fixtures/CoreValidationModule.cpp')
 $fmtRoot = Split-Path -Parent ($headerLock | Where-Object name -eq 'fmt').include
 $sources += @((Join-Path $fmtRoot 'src/format.cc'),(Join-Path $dependencyRoot 'symbolprovider/SymbolProvider-6c93ec45c8455992ee726d92df60316c8e731c44/src/SymbolProvider.cpp'))
 $sourceHashes = @($sources | ForEach-Object { [pscustomobject]@{path=$_.Substring($projectRoot.Length+1);sha256=(Get-SourceHash $_)} })
@@ -76,6 +77,15 @@ foreach ($name in $moduleNames) {
     if ($LASTEXITCODE -ne 0) { throw "Module DLL inspection failed: $name" }
 }
 }
+$fixtureOutput = Join-Path $projectRoot 'bin/validation'
+New-Item -ItemType Directory -Path $fixtureOutput -Force | Out-Null
+$fixtureObject = Compile-Cpp 'tests/Fixtures/CoreValidationModule.cpp' ($commonFlags + '/DETERNAL_MODULE_BUILD')
+$fixtureDll = Join-Path $fixtureOutput 'CoreValidationModule.dll'
+& $nativeLinker @nativeLinkerArguments '/DLL' '/DEBUG' ('/OUT:'+ $fixtureDll) ('/PDB:'+ $fixtureOutput+'/CoreValidationModule.pdb') $fixtureObject @runtimeLibraries
+if ($LASTEXITCODE -ne 0) { throw 'Validation fixture DLL link failed' }
+& $nativeReadobj '--coff-exports' '--coff-imports' $fixtureDll | Set-Content -LiteralPath (Join-Path $build 'CoreValidationModule-inspection.txt') -Encoding utf8
+if ($LASTEXITCODE -ne 0) { throw 'Validation fixture DLL inspection failed' }
+$validationFixture = [pscustomobject]@{target='CoreValidationModule';project_path='bin/validation/CoreValidationModule.dll';sha256=(Get-SourceHash $fixtureDll)}
 $hostSources = @('host/EternalHost/HostMod.cpp') + @((Get-ChildItem -LiteralPath (Join-Path $projectRoot 'host/EternalHost/runtime') -Filter '*.cpp' -File).FullName | ForEach-Object { $_.Substring($projectRoot.Length+1) })
 $hostNative = Join-Path $projectRoot 'host/EternalHost/native'
 if (Test-Path -LiteralPath $hostNative -PathType Container) {
@@ -107,6 +117,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Host DLL inspection failed' }
 foreach ($source in $sourceHashes) {
     if ((Get-SourceHash (Join-Path $projectRoot $source.path)) -ne $source.sha256) { throw "Build input changed during compilation: $($source.path)" }
 }
-[pscustomobject]@{format_version=2;host_only=[bool]$HostOnly;module_baseline=$moduleBaseline;architecture='Host + 8 internal ABI modules';compiler='LLVM22 clang-cl MSVC ABI /MD';levilamina='26.51.6';sources=$sourceHashes;products=$products;built_utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $build 'build-receipt.json') -Encoding utf8
+[pscustomobject]@{format_version=2;host_only=[bool]$HostOnly;module_baseline=$moduleBaseline;architecture='Host + 8 internal ABI modules';compiler='LLVM22 clang-cl MSVC ABI /MD';levilamina='26.51.6';sources=$sourceHashes;products=$products;validation_fixture=$validationFixture;built_utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $build 'build-receipt.json') -Encoding utf8
 if ($HostOnly) { Write-Output 'Rebuilt EternalHost and verified the unchanged 8 internal module DLLs. No deployment or server startup was performed.' }
 else { Write-Output 'Built EternalHost and all 8 internal module DLLs. No deployment or server startup was performed.' }

@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-04。Phase 2 实现与验收进行中，范围为 Core 认证身份、权限、Capability、Money/Reputation、事务、审计、回执与 Outbox。详细当前结果以 [Phase 2 独立报告](docs/PHASE2_TEST_REPORT.md) 为准。正式资产能力保持关闭，七个业务模块保持 PLANNED / disabled；不会自动进入 Phase 3。
+更新：2026-10-05。Phase 2 实现与验收进行中，范围为 Core 认证身份、权限、Capability、Money/Reputation、事务、审计、回执与 Outbox。详细当前结果以 [Phase 2 独立报告](docs/PHASE2_TEST_REPORT.md) 为准。首次云 CI 已通过，正在补充公开 SDK 的真实调用票据路由及独立验证模块，须另行验收。正式资产能力保持关闭，七个业务模块保持 PLANNED / disabled；不会自动进入 Phase 3。
 
 下表及其后段落是保留的 Phase 1.5 历史范围；本阶段的新源码、DLL 和真实玩家结果单独验证，不能继承其通过结论。
 

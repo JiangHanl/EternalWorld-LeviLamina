@@ -22,6 +22,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Module artifact test build failed' }
     & 'bin/tests/ModuleArtifactTests.exe' 'bin/Eternal'
     if ($LASTEXITCODE -ne 0) { throw 'Module artifact test failed' }
+    & $Xmake 'build' 'CoreValidationModule'
+    if ($LASTEXITCODE -ne 0) { throw 'Public SDK validation fixture build failed' }
+    & $Xmake 'build' 'ValidationModuleTests'
+    if ($LASTEXITCODE -ne 0) { throw 'Real DLL validation fixture test build failed' }
+    & 'bin/tests/ValidationModuleTests.exe' 'bin/Eternal' 'bin/validation/CoreValidationModule.dll'
+    if ($LASTEXITCODE -ne 0) { throw 'Real DLL validation fixture tests failed' }
     & (Join-Path $PSScriptRoot 'Test-PublicTree.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Public source audit failed' }
     & (Join-Path $PSScriptRoot 'Test-NativeBoundary.ps1') -SourceOnly

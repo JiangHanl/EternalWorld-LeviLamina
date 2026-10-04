@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 
 using namespace eternal::host;
@@ -21,6 +22,7 @@ struct Binding {
     std::string module;
     uint64_t generation{}, caps{};
     bool active{true};
+    bool routeRegistered{};
 };
 std::array<Fixture, 3> modules;
 std::unordered_map<uint64_t, Binding> bindings;
@@ -29,7 +31,8 @@ std::vector<std::string> boundNames, trace;
 EcNativeIngressApi native{};
 EternalCorePhase2Api discovery{};
 std::filesystem::path folder;
-bool publishIngress{}, malformedBinding{}, denyBinding{};
+bool publishIngress{}, malformedBinding{}, denyBinding{}, wrongGeneration{}, missingRouteEntry{};
+uint32_t publishedMinor{}, returnedMinor{}, returnedSize{};
 uint64_t epoch{}, serial{};
 int groupCount{}, bindCalls{}, revokeCalls{};
 const uint32_t statusTable = 9;
@@ -46,6 +49,28 @@ EcStatus EC_CALL readAsset(const EcPhase2AssetRequest *request, EcPhase2AssetSna
         return EC_INVALID_ARGUMENT;
     const auto found = bindings.find(request->meta.caller_context.low);
     return found != bindings.end() && found->second.active ? EC_OK : EC_REVOKED;
+}
+EcStatus EC_CALL registerRoute(const EcPhase2CommandRouteRequest *request) noexcept {
+    if (!request)
+        return EC_INVALID_ARGUMENT;
+    const auto found = bindings.find(request->caller_context.low);
+    if (found == bindings.end() || !found->second.active)
+        return EC_REVOKED;
+    found->second.routeRegistered = true;
+    return EC_OK;
+}
+EcStatus EC_CALL unregisterRoute(const EcPhase2RouteRemovalRequest *request) noexcept {
+    if (!request)
+        return EC_INVALID_ARGUMENT;
+    const auto found = bindings.find(request->caller_context.low);
+    if (found == bindings.end() || !found->second.active)
+        return EC_REVOKED;
+    found->second.routeRegistered = false;
+    return EC_OK;
+}
+EcStatus EC_CALL authorizeInvocation(const EcPhase2InvocationAuthorization*,
+                                      EcPhase2InvocationGrant*) noexcept {
+    return EC_UNSUPPORTED; // Core authority is covered by its own Runtime tests.
 }
 EcStatus EC_CALL bindModule(EcNativeBridgeToken token, const EcNativeModuleBindingRequest *request,
                             EcNativeModuleBindingResult *out) noexcept {
@@ -64,17 +89,21 @@ EcStatus EC_CALL bindModule(EcNativeBridgeToken token, const EcNativeModuleBindi
         return EC_CONFLICT;
     auto &b = it->second;
     b.module = name;
-    b.generation = request->module_generation;
+    b.generation = request->module_generation + (wrongGeneration ? 1 : 0);
     b.caps = request->approved_module_capabilities;
     b.api = discovery;
     b.api.caller_context = {serial, epoch};
     b.api.caller_generation = b.generation;
     b.api.instance_epoch = epoch;
+    b.api.api_minor = returnedMinor;
+    b.api.struct_size = returnedSize;
     b.api.read_asset = readAsset;
+    if (missingRouteEntry)
+        b.api.authorize_invocation = nullptr;
     *out = {sizeof(*out),
             EC_NATIVE_INGRESS_STRUCT_VERSION,
             &b.api,
-            sizeof(b.api),
+            returnedSize,
             0,
             b.api.caller_context,
             b.generation,
@@ -104,6 +133,7 @@ EcStatus EC_CALL revokeModule(EcNativeBridgeToken token,
             revokeBeforeServiceDelete = true;
     }
     b.active = false;
+    b.routeRegistered = false;
     return EC_OK;
 }
 void reset() {
@@ -117,7 +147,9 @@ void reset() {
     serial = 0;
     epoch = 0;
     publishIngress = true;
-    malformedBinding = denyBinding = false;
+    malformedBinding = denyBinding = wrongGeneration = missingRouteEntry = false;
+    publishedMinor = returnedMinor = EC_PHASE2_API_MINOR;
+    returnedSize = sizeof(EternalCorePhase2Api);
     discovery = {};
     discovery.v1_0.struct_size = sizeof(EternalCoreApi);
     discovery.v1_0.api_major = EC_API_MAJOR;
@@ -125,6 +157,9 @@ void reset() {
     discovery.struct_version = EC_PHASE2_STRUCT_VERSION;
     discovery.api_major = EC_PHASE2_API_MAJOR;
     discovery.api_minor = EC_PHASE2_API_MINOR;
+    discovery.register_command_route = registerRoute;
+    discovery.unregister_command_route = unregisterRoute;
+    discovery.authorize_invocation = authorizeInvocation;
     native = {};
     native.struct_size = sizeof(native);
     native.struct_version = EC_NATIVE_INGRESS_STRUCT_VERSION;
@@ -192,7 +227,7 @@ template <size_t I> EmStatus EM_CALL enable() noexcept {
         native.bridge_nonce = {1234, epoch};
         discovery.instance_epoch = epoch;
         EmServiceOffer p2{sizeof(p2),          EM_STRUCT_VERSION,   emView(EC_PHASE2_SERVICE_ID),
-                          EC_PHASE2_API_MAJOR, EC_PHASE2_API_MINOR, EC_MODULE_CAP_ALL,
+                          EC_PHASE2_API_MAJOR, publishedMinor, EC_MODULE_CAP_ALL,
                           &discovery,          sizeof(discovery),   0};
         result = m.context.publish_service(m.context.instance, &p2);
         if (result != EM_OK)
@@ -264,13 +299,13 @@ std::vector<Candidate> candidates() {
             {"core", folder / "core.dll", true, true},
             {"quests", folder / "quests.dll", true, true}};
 }
-EmServiceRequest request(std::string_view id, uint64_t caps = 0) {
+EmServiceRequest request(std::string_view id, uint64_t caps = EC_MODULE_CAP_PLAYER_READ) {
     return {sizeof(EmServiceRequest),
             EM_STRUCT_VERSION,
             emView(id),
             1,
             id == EC_PHASE2_SERVICE_ID ? EC_PHASE2_API_MINOR : 0,
-            caps,
+            id == EC_PHASE2_SERVICE_ID ? caps : 0,
             0};
 }
 EmServiceReference reference() {
@@ -368,6 +403,132 @@ int main() {
             require(query(2, request(EC_PHASE2_SERVICE_ID, caps), other) == EM_UNSUPPORTED &&
                         bindCalls == 2,
                     "Immutable binding expanded capabilities");
+        });
+        test("zero Phase2 requested capabilities do not mint a binding", [] {
+            auto host = started();
+            auto r = reference();
+            require(query(1, request(EC_PHASE2_SERVICE_ID, 0), r) == EM_INVALID_ARGUMENT &&
+                        !r.table && bindCalls == 0,
+                    "Zero-capability query minted a caller scope");
+        });
+        test("legacy 1.1 prefix remains queryable and cannot satisfy a 1.2 request", [] {
+            static_assert(sizeof(EternalCorePhase2ApiV1_1) == EC_PHASE2_API_V1_1_SIZE);
+            publishedMinor = returnedMinor = 1;
+            returnedSize = EC_PHASE2_API_V1_1_SIZE;
+            discovery.api_minor = 1;
+            discovery.struct_size = returnedSize;
+            auto host = started();
+            auto q = request(EC_PHASE2_SERVICE_ID);
+            q.minimum_minor = 1;
+            auto r = reference();
+            require(query(1, q, r) == EM_OK && r.api_minor == 1 &&
+                        r.table_size == EC_PHASE2_API_V1_1_SIZE,
+                    "Compatible 1.1 prefix was rejected or misreported");
+            q.minimum_minor = 2;
+            require(query(1, q, r) == EM_ABI_MISMATCH && !r.table && bindCalls == 1,
+                    "Legacy provider fulfilled 1.2 or minted a second binding");
+        });
+        test("cached scoped version is checked independently from advertised discovery", [] {
+            returnedMinor = 1;
+            returnedSize = EC_PHASE2_API_V1_1_SIZE;
+            auto host = started();
+            auto q = request(EC_PHASE2_SERVICE_ID);
+            q.minimum_minor = 1;
+            auto r = reference();
+            require(query(1, q, r) == EM_OK && r.api_minor == 1,
+                    "Actual scoped version was replaced by Host build version");
+            q.minimum_minor = 2;
+            require(query(1, q, r) == EM_ABI_MISMATCH && !r.table && bindCalls == 1,
+                    "Cached 1.1 scope escaped newer-version validation");
+        });
+        test("1.2 scoped table requires complete append-only route entries", [] {
+            returnedSize = EC_PHASE2_API_V1_1_SIZE;
+            auto host = started();
+            auto q = request(EC_PHASE2_SERVICE_ID);
+            q.minimum_minor = 1;
+            auto r = reference();
+            require(query(1, q, r) == EM_ABI_MISMATCH && !r.table && revokeCalls == 1,
+                    "Truncated table claiming 1.2 was accepted");
+        });
+        test("missing 1.2 authorization entry and wrong Node generation are revoked", [] {
+            missingRouteEntry = true;
+            auto host = started();
+            auto r = reference();
+            require(query(1, request(EC_PHASE2_SERVICE_ID), r) == EM_ABI_MISMATCH &&
+                        !r.table && revokeCalls == 1,
+                    "Incomplete route table returned a caller context");
+            missingRouteEntry = false;
+            wrongGeneration = true;
+            require(query(2, request(EC_PHASE2_SERVICE_ID), r) == EM_ABI_MISMATCH &&
+                        !r.table && revokeCalls == 2,
+                    "Wrong actual module generation was accepted");
+        });
+        test("native binding revocation removes registered routes before module teardown", [] {
+            auto host = started();
+            auto r = reference();
+            require(query(1, request(EC_PHASE2_SERVICE_ID), r) == EM_OK,
+                    "Route scope unavailable");
+            const auto* api = static_cast<const EternalCorePhase2Api*>(r.table);
+            EcPhase2CommandRouteRequest route{};
+            route.caller_context = api->caller_context;
+            require(api->register_command_route(&route) == EC_OK &&
+                        bindings.at(route.caller_context.low).routeRegistered,
+                    "Mock Core route not registered");
+            std::string error;
+            require(host->disable(error) &&
+                        !bindings.at(route.caller_context.low).routeRegistered &&
+                        api->register_command_route(&route) == EC_REVOKED,
+                    "Revoked Core binding retained a module route");
+            const auto revoked = std::find(trace.begin(), trace.end(), "revoke:market");
+            const auto disabled = std::find(trace.begin(), trace.end(), "disable:market");
+            require(revoked < disabled, "Route revoke happened after the DLL Disable callback");
+        });
+        test("trusted native callback guard rejects reentrant teardown until return", [] {
+            auto host = started();
+            auto r = reference();
+            require(query(1, request(EC_PHASE2_SERVICE_ID), r) == EM_OK,
+                    "Initial native scope missing");
+            std::string error;
+            {
+                auto guard = host->guardTrustedDispatch();
+                require(static_cast<bool>(guard) && host->isDispatching(),
+                        "Native callback did not retain dispatch");
+                auto moved = std::move(guard);
+                require(!guard && static_cast<bool>(moved), "Guard move lost ownership");
+                {
+                    auto nested = host->guardTrustedDispatch();
+                    require(static_cast<bool>(nested) && host->isDispatching(),
+                            "Nested native dispatch was refused");
+                }
+                require(host->isDispatching(), "Nested return released its outer callback");
+                require(!host->disable(error) && !host->shutdown(error) &&
+                            !host->enable(error),
+                        "Direct callback could tear down its active DLL stack");
+                require(host->snapshot().enabled && revokeCalls == 0,
+                        "Rejected lifecycle call revoked an active route scope");
+            }
+            require(!host->isDispatching() && host->disable(error) && revokeCalls == 1,
+                    "Returning callback did not release teardown exclusion");
+            require(!host->guardTrustedDispatch(), "Disabled Host accepted native dispatch");
+        });
+        test("trusted native guard releases on exceptions and rejects foreign threads", [] {
+            auto host = started();
+            bool foreignAccepted = true;
+            std::thread worker([&] {
+                auto guard = host->guardTrustedDispatch();
+                foreignAccepted = static_cast<bool>(guard);
+            });
+            worker.join();
+            require(!foreignAccepted && !host->isDispatching(),
+                    "Foreign thread obtained trusted dispatch");
+            try {
+                auto guard = host->guardTrustedDispatch();
+                require(static_cast<bool>(guard), "Native guard unavailable");
+                throw std::runtime_error("Synthetic callback failure");
+            } catch (const std::runtime_error&) {}
+            std::string error;
+            require(!host->isDispatching() && host->shutdown(error),
+                    "Callback exception retained dispatch or leaked modules");
         });
         test("Disable revokes before deleting registrations and re-enable gets fresh generations",
              [] {

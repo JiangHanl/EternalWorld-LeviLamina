@@ -135,6 +135,8 @@ struct LLAdapter::Impl {
         const auto count = static_cast<int>(json["buttons"].size());
         page.sendTo(player, [this, target, targetXuid, action, count](Player& sender, int selected, ll::form::FormCancelReason cancelled) {
             try {
+                auto dispatch = host.guardTrustedDispatch();
+                if (!dispatch) return;
                 const auto* api = ingress(); auto current = authenticated(sender);
                 if (!api || !current || current->value.trusted_xuid != targetXuid
                     || std::memcmp(&current->value.trusted_uuid, &target, sizeof(target))) return;
@@ -153,6 +155,8 @@ struct LLAdapter::Impl {
     }
     void command(CommandOrigin const& origin, CommandOutput& output, const NativeParams& params) {
         try {
+            auto dispatch = host.guardTrustedDispatch();
+            if (!dispatch) { output.error("EternalCore is not ready"); return; }
             const auto* api = ingress();
             if (!api) { output.error("EternalCore is not ready"); return; }
             EcNativeCommandRequest request{sizeof(request), EC_NATIVE_INGRESS_STRUCT_VERSION};

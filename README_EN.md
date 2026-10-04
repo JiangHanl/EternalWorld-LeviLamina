@@ -43,7 +43,7 @@ Core provides Phase 2 infrastructure and development acceptance entry points; pr
 
 ## SDK and development
 
-DLL boundaries use a Stable C ABI; development uses modern C++ EternalSDK. Module ABI 1.0, legacy Core API 1.0 and the independent Core API 1.1 are versioned separately. Structures carry size and version; capabilities are queried explicitly. No STL objects, exceptions or SQLite handles cross this boundary. Allocators own corresponding deallocation. Use Service Registry for synchronous calls and EventBus for broadcasts, never another module's private source or database.
+DLL boundaries use a Stable C ABI; development uses modern C++ EternalSDK. Module ABI 1.0, legacy Core API 1.0 and the independent Core API 1.2 are versioned separately, retaining the complete 1.1 prefix. Structures carry size and version; capabilities are queried explicitly. No STL objects, exceptions or SQLite handles cross this boundary. Allocators own corresponding deallocation. Use Service Registry for synchronous calls and EventBus for broadcasts, never another module's private source or database.
 
 Start with the [template](templates/EternalModule/README.md), [SDK](sdk/EternalSDK/README.md), [MODULE_DEVELOPMENT](MODULE_DEVELOPMENT.md) and Example Module. Extend an existing domain first; add a DLL target only for a distinct business domain.
 

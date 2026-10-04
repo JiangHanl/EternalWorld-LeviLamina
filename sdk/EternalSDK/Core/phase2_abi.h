@@ -3,18 +3,21 @@
 
 #include "core_abi.h"
 
-/* Independent 1.1 service. Never replace or extend the stored 1.0 table in
+/* Independent 1.2 service; the complete 1.1 prefix is unchanged. Never replace or extend the stored 1.0 table in
  * place. Its complete 96-byte prefix and all original DTO layouts remain fixed.
  * Caller/context/capability values are Core-issued opaque, unpredictable IDs.
  * No public function issues trusted player identity, module scope or Owner.
+ * 1.2 authorization accepts only an active Core-issued native invocation.
  * A registered module ID, native OP, a role snapshot or a supplied XUID grants
  * nothing. Core validates live context, capability, player session/role versions,
  * operation/target/asset/amount scope, budgets, expiry and revocation on every call.
  */
 #define EC_PHASE2_SERVICE_ID "EternalCore.Phase2Api"
 #define EC_PHASE2_API_MAJOR UINT32_C(1)
-#define EC_PHASE2_API_MINOR UINT32_C(1)
+#define EC_PHASE2_API_MINOR UINT32_C(2)
 #define EC_PHASE2_STRUCT_VERSION UINT32_C(1)
+#define EC_PHASE2_API_V1_1_SIZE UINT32_C(240)
+#define EC_PHASE2_API_V1_2_SIZE UINT32_C(264)
 #define EC_PHASE2_PRODUCTION_FEATURES UINT64_C(0)
 #define EC_PHASE2_OUTBOX_TOPIC "core.outbox.changed"
 #define EC_PHASE2_MAX_NAME_UTF8_BYTES UINT32_C(128)
@@ -86,6 +89,9 @@ extern "C" {
 typedef EcId128 EcCallerContext;
 typedef EcId128 EcPlayerId;
 typedef EcId128 EcRequestId;
+typedef EcId128 EcInvocationToken;
+#define EC_P2_INVOCATION_DEVELOPMENT_ONLY UINT32_C(1)
+#define EC_P2_CAPABILITY_DEVELOPMENT_ONLY UINT32_C(1)
 
 typedef struct EcPhase2RequestMeta {
     /* When embedded at offset zero, size describes the COMPLETE request, not
@@ -312,6 +318,89 @@ typedef EcStatus (EC_CALL *EcSubmitPhase2MutationFn)(const EcPhase2MutationReque
 typedef EcStatus (EC_CALL *EcPollPhase2ReceiptFn)(const EcPhase2ReceiptRequest*, EcPhase2Receipt*) EC_NOEXCEPT;
 typedef EcStatus (EC_CALL *EcReadPhase2OutboxFn)(const EcPhase2OutboxRequest*, EcPhase2OutboxBuffer*) EC_NOEXCEPT;
 
+/* Core-only synchronous dispatch from a genuine authenticated Native invocation.
+ * All Invocation values/arguments are borrowed for this callback only. The
+ * token stops accepting authorization requests when the callback returns.
+ * Issued capabilities may live until their Core expiry/revocation. Neither the
+ * informational fields nor development flags are bearer authority by themselves.
+ */
+typedef struct EcPhase2Invocation {
+    uint32_t struct_size,struct_version;
+    EcInvocationToken invocation;
+    EcCallerContext caller_context;
+    EcPlayerId subject;
+    EcRequestId request_id;
+    uint64_t identity_revision,permission_revision,session_generation;
+    uint64_t module_generation,issued_at_steady_ms,expires_at_steady_ms;
+    EcUtf8View arguments;
+    uint32_t flags,reserved0;
+    uint64_t reserved1;
+} EcPhase2Invocation;
+typedef EcStatus (EC_CALL *EcPhase2CommandCallback)(void* user,const EcPhase2Invocation*,EcUtf8Buffer* reply) EC_NOEXCEPT;
+/* reply is caller/Core-owned fixed storage. Callback must not replace its data
+ * or capacity, must set required (including NUL) when writing, and must return
+ * without throwing. Route removal while its callback is active returns CONFLICT;
+ * retry after return before releasing user. Core Disable/revoke during dispatch
+ * also refuses cleanup; callbacks may not unload their own image. */
+typedef struct EcPhase2CommandRouteRequest {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcUtf8View route_id; /* Lowercase ASCII letters/digits/_/-; 1..64 bytes. */
+    uint64_t operation_mask; /* Nonzero subset of operation bits (operation-1). */
+    EcPhase2CommandCallback callback;
+    void* user; /* Consumer-owned until unregister + all active callbacks return. */
+    uint64_t reserved;
+} EcPhase2CommandRouteRequest;
+typedef struct EcPhase2RouteRemovalRequest {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcUtf8View route_id;
+    uint64_t reserved;
+} EcPhase2RouteRemovalRequest;
+/* No subject/XUID/Owner input: Core resolves the real subject from invocation.
+ * Context and token must belong to this exact module generation. Zero revision
+ * is permitted only if the Core-issued resulting capability permits it. */
+typedef struct EcPhase2InvocationAuthorization {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcInvocationToken invocation;
+    EcPlayerId target,recipient;
+    uint32_t operation,asset;
+    int64_t minor_units;
+    uint64_t role_mask,expected_revision;
+    uint64_t reserved[2];
+} EcPhase2InvocationAuthorization;
+typedef struct EcPhase2InvocationGrant {
+    uint32_t struct_size,struct_version;
+    EcCapability capability;
+    EcPlayerId subject;
+    uint64_t issued_at_steady_ms,expires_at_steady_ms,caller_generation;
+    uint32_t flags,reserved0;
+    uint64_t reserved1;
+} EcPhase2InvocationGrant;
+typedef EcStatus (EC_CALL *EcRegisterCommandRouteFn)(const EcPhase2CommandRouteRequest*) EC_NOEXCEPT;
+typedef EcStatus (EC_CALL *EcUnregisterCommandRouteFn)(const EcPhase2RouteRemovalRequest*) EC_NOEXCEPT;
+typedef EcStatus (EC_CALL *EcAuthorizeInvocationFn)(const EcPhase2InvocationAuthorization*,EcPhase2InvocationGrant*) EC_NOEXCEPT;
+typedef struct EternalCorePhase2ApiV1_1 {
+    EternalCoreApi v1_0; /* Unmodified 96-byte legacy table, including features=0. */
+    uint32_t struct_size;
+    uint32_t struct_version;
+    uint32_t api_major;
+    uint32_t api_minor;
+    EcCallerContext caller_context; /* Zero on unbound discovery/diagnostic table. */
+    uint64_t caller_generation;
+    uint64_t instance_epoch;
+    EcGetPhase2FeaturesFn get_phase2_features;
+    EcReadPhase2IdentityFn read_identity_v2;
+    EcReadPhase2RolesFn read_roles;
+    EcCheckPhase2PermissionFn check_permission;
+    EcReadPhase2AssetFn read_asset;
+    EcSubmitPhase2MutationFn submit_mutation;
+    EcPollPhase2ReceiptFn poll_receipt_v2;
+    EcReadPhase2OutboxFn read_outbox;
+    uint64_t reserved[4];
+} EternalCorePhase2ApiV1_1;
+
 typedef struct EternalCorePhase2Api {
     EternalCoreApi v1_0; /* Unmodified 96-byte legacy table, including features=0. */
     uint32_t struct_size;
@@ -330,6 +419,9 @@ typedef struct EternalCorePhase2Api {
     EcPollPhase2ReceiptFn poll_receipt_v2;
     EcReadPhase2OutboxFn read_outbox;
     uint64_t reserved[4];
+    EcRegisterCommandRouteFn register_command_route;
+    EcUnregisterCommandRouteFn unregister_command_route;
+    EcAuthorizeInvocationFn authorize_invocation;
 } EternalCorePhase2Api;
 
 /* Core owns a scoped table until that module binding is revoked/disabled or Core
@@ -356,7 +448,14 @@ EC_STATIC_ASSERT(sizeof(EcPhase2OutboxRequest)==112, "Phase2 outbox request layo
 EC_STATIC_ASSERT(sizeof(EcPhase2OutboxEvent)==104, "Phase2 outbox event layout");
 EC_STATIC_ASSERT(sizeof(EcPhase2OutboxBuffer)==48, "Phase2 outbox buffer layout");
 EC_STATIC_ASSERT(sizeof(EcPhase2OutboxNotice)==32, "Phase2 outbox notice layout");
-EC_STATIC_ASSERT(sizeof(EternalCorePhase2Api)==240, "Phase2 independent table layout");
+EC_STATIC_ASSERT(sizeof(EternalCorePhase2ApiV1_1)==240, "Phase2 1.1 prefix layout");
+EC_STATIC_ASSERT(sizeof(EternalCorePhase2Api)==264, "Phase2 1.2 independent table layout");
+EC_STATIC_ASSERT(offsetof(EternalCorePhase2Api,register_command_route)==240, "Phase2 1.2 appends after full 1.1 prefix");
+EC_STATIC_ASSERT(sizeof(EcPhase2Invocation)==152, "Invocation layout");
+EC_STATIC_ASSERT(sizeof(EcPhase2CommandRouteRequest)==72, "Command route layout");
+EC_STATIC_ASSERT(sizeof(EcPhase2RouteRemovalRequest)==48, "Route removal layout");
+EC_STATIC_ASSERT(sizeof(EcPhase2InvocationAuthorization)==120, "Invocation authorization layout");
+EC_STATIC_ASSERT(sizeof(EcPhase2InvocationGrant)==80, "Invocation grant layout");
 EC_STATIC_ASSERT(offsetof(EternalCorePhase2Api,struct_size)==96, "Legacy prefix stays 96 bytes");
 EC_STATIC_ASSERT(offsetof(EternalCorePhase2Api,get_phase2_features)==144, "Phase2 first method offset");
 #ifdef __cplusplus

@@ -28,7 +28,8 @@ try {
         @{name='ModuleArtifactTests';sources=@('tests/Host/real_module_tests.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp');extra=@()},
         @{name='ConfigTests';sources=@('tests/Host/config_tests.cpp','host/EternalHost/runtime/Config.cpp');extra=@()},
         @{name='SDKCppTests';sources=@('sdk/EternalSDK/tests/cpp_headers.cpp');extra=@()},
-        @{name='Phase2ClientContracts';sources=@('sdk/EternalSDK/tests/phase2_client_contract.cpp');extra=@()}
+        @{name='Phase2ClientContracts';sources=@('sdk/EternalSDK/tests/phase2_client_contract.cpp');extra=@()},
+        @{name='ValidationModuleTests';sources=@('tests/Host/validation_module_tests.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp');extra=@()}
     )
     foreach ($case in $cases) {
         if ($case.name -eq 'Phase2RuntimeTests' -and (Test-Path -LiteralPath 'modules/EternalCore/api/Phase2Service.cpp' -PathType Leaf)) {
@@ -50,6 +51,7 @@ try {
         & $nativeLinker @nativeLinkerArguments ('/OUT:'+ $executable) @objects @testLibraries
         if ($LASTEXITCODE -ne 0) { throw "Test link failed: $($case.name)" }
         if ($case.name -eq 'ModuleArtifactTests') { & $executable (Join-Path $projectRoot 'bin/Eternal') }
+        elseif ($case.name -eq 'ValidationModuleTests') { & $executable (Join-Path $projectRoot 'bin/Eternal') (Join-Path $projectRoot 'bin/validation/CoreValidationModule.dll') }
         else { & $executable }
         if ($LASTEXITCODE -ne 0) { throw "Test failed: $($case.name)" }
     }

@@ -46,7 +46,7 @@ Core 当前提供 Phase 2 基础设施及开发验收入口，生产资产 API �
 
 ## SDK 与开发
 
-跨 DLL 使用 Stable C ABI，开发层提供 Modern C++ EternalSDK。Module ABI 1.0、旧 Core API 1.0 和独立 Core API 1.1 分别版本化；结构携带版本与大小，能力须显式查询。边界不传递 STL 对象、异常或 SQLite 句柄，分配方负责释放。同步通信走 Service Registry，广播走 EventBus；禁止读取其他模块私有源码或数据库。
+跨 DLL 使用 Stable C ABI，开发层提供 Modern C++ EternalSDK。Module ABI 1.0、旧 Core API 1.0 和独立 Core API 1.2 分别版本化；新表保留完整 1.1 前缀，结构携带版本与大小，能力须显式查询。边界不传递 STL 对象、异常或 SQLite 句柄，分配方负责释放。同步通信走 Service Registry，广播走 EventBus；禁止读取其他模块私有源码或数据库。
 
 新模块从 [标准模板](templates/EternalModule/README.md) 开始，只需阅读 [SDK](sdk/EternalSDK/README.md)、[MODULE_DEVELOPMENT](MODULE_DEVELOPMENT.md) 和 Example Module。优先扩展已有业务域，形成独立业务域才增加 DLL target。
 

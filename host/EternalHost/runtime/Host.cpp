@@ -208,6 +208,7 @@ struct Host::Impl {
         *out={sizeof(*out),EM_STRUCT_VERSION,nullptr,0,0,0,0,0,0};
         const auto declared=std::find_if(n.dependencies.begin(),n.dependencies.end(),[](const auto& d){return d.id==EM_CORE_MODULE_ID;});
         if(declared==n.dependencies.end())return EM_CONFLICT;
+        if(!request->required_capabilities)return EM_INVALID_ARGUMENT;
         if((request->required_capabilities&~EC_MODULE_CAP_ALL) ||
            (request->required_capabilities&declared->caps)!=request->required_capabilities)return EM_UNSUPPORTED;
         EmServiceReference provider{};
@@ -216,7 +217,9 @@ struct Host::Impl {
         if(found!=EM_OK)return found;
         const auto service=services.find(EC_PHASE2_SERVICE_ID);
         if(service==services.end() || service->second.owner->report.id!=EM_CORE_MODULE_ID ||
-           provider.api_major!=EC_PHASE2_API_MAJOR || provider.api_minor<EC_PHASE2_API_MINOR)return EM_ABI_MISMATCH;
+           provider.api_major!=EC_PHASE2_API_MAJOR || provider.api_minor<1 ||
+           provider.api_minor<request->minimum_minor)return EM_ABI_MISMATCH;
+        const auto minimumSize=request->minimum_minor>=2?EC_PHASE2_API_V1_2_SIZE:EC_PHASE2_API_V1_1_SIZE;
         const auto requested=request->required_capabilities&declared->caps;
         if(n.binding && n.binding->provider_generation==provider.generation &&
            n.binding->module_generation==n.generation) {
@@ -245,14 +248,16 @@ struct Host::Impl {
             const auto status=native->bind_module(native->bridge_nonce,&binding,&result);
             if(status!=EC_OK)return nativeStatus(status);
             const auto* api=result.scoped_api;
-            const bool good=result.struct_size==sizeof(result) && result.struct_version==EC_NATIVE_INGRESS_STRUCT_VERSION &&
-                !result.reserved0 && !result.reserved1 && result.table_size>=sizeof(EternalCorePhase2Api) && api &&
-                nonzero(result.caller_context) && result.caller_generation && result.instance_epoch==native->instance_epoch &&
+            bool good=result.struct_size==sizeof(result) && result.struct_version==EC_NATIVE_INGRESS_STRUCT_VERSION &&
+                !result.reserved0 && !result.reserved1 && result.table_size>=minimumSize && api &&
+                nonzero(result.caller_context) && result.caller_generation==n.generation && result.instance_epoch==native->instance_epoch &&
                 api->v1_0.struct_size==sizeof(EternalCoreApi) && api->v1_0.api_major==EC_API_MAJOR &&
-                api->struct_size==sizeof(*api) && api->struct_version==EC_PHASE2_STRUCT_VERSION &&
-                api->api_major==EC_PHASE2_API_MAJOR && api->api_minor>=EC_PHASE2_API_MINOR &&
+                api->struct_size>=minimumSize && api->struct_size<=result.table_size && api->struct_version==EC_PHASE2_STRUCT_VERSION &&
+                api->api_major==EC_PHASE2_API_MAJOR && api->api_minor>=1 && api->api_minor>=request->minimum_minor &&
                 equal(api->caller_context,result.caller_context) && api->caller_generation==result.caller_generation &&
                 api->instance_epoch==result.instance_epoch;
+            if(good && api->api_minor>=2)good=api->struct_size>=EC_PHASE2_API_V1_2_SIZE &&
+                api->register_command_route && api->unregister_command_route && api->authorize_invocation;
             if(!good) {
                 if(nonzero(result.caller_context) && result.caller_generation) {
                     constexpr char reason[]="Host refused malformed scoped API";
@@ -264,8 +269,13 @@ struct Host::Impl {
             n.binding=NativeBinding{native,provider.generation,n.generation,requested,result};
         }
         const auto& cached=*n.binding;
+        const auto* api=cached.result.scoped_api;
+        if(cached.result.table_size<minimumSize || api->struct_size<minimumSize ||
+           api->api_minor<request->minimum_minor)return EM_ABI_MISMATCH;
+        if(request->minimum_minor>=2 && (!api->register_command_route ||
+           !api->unregister_command_route || !api->authorize_invocation))return EM_ABI_MISMATCH;
         *out={sizeof(*out),EM_STRUCT_VERSION,cached.result.scoped_api,cached.result.table_size,
-              EC_PHASE2_API_MAJOR,EC_PHASE2_API_MINOR,0,cached.capabilities,provider.generation};
+              api->api_major,api->api_minor,0,cached.capabilities,provider.generation};
         return EM_OK;
     }
     static EmStatus EM_CALL queryService(void* p,const EmServiceRequest* request,EmServiceReference* out) noexcept {
@@ -395,6 +405,15 @@ struct Host::Impl {
 
 Host::Host(std::unique_ptr<LibraryLoader> loader,LogSink log):impl_(std::make_unique<Impl>(std::move(loader),std::move(log))){}
 Host::~Host(){std::string error;if(!shutdown(error)&&impl_->quarantined)impl_.release();}
+Host::TrustedDispatch::TrustedDispatch(TrustedDispatch&& other) noexcept : host_(other.host_) { other.host_=nullptr; }
+Host::TrustedDispatch::~TrustedDispatch() { if(host_)--host_->impl_->event_depth; }
+Host::TrustedDispatch Host::guardTrustedDispatch() noexcept {
+    auto& h=*impl_;
+    if(!h.onThread()||!h.enabled||h.busy||h.quarantined||h.final_stop||h.event_depth>=8)return TrustedDispatch(nullptr);
+    if(!h.event_depth)h.dispatch_count=0;
+    ++h.event_depth;return TrustedDispatch(this);
+}
+bool Host::isDispatching() const noexcept { return impl_->onThread()&&impl_->event_depth!=0; }
 bool Host::discover(const std::filesystem::path& base,const std::vector<ModuleConfig>& config,std::vector<Candidate>& out,std::string& error) {
     try {std::vector<Candidate> result;std::unordered_set<std::string> ids,paths;bool core=false;
         if(config.empty()||config.size()>64){error="Module count must be 1..64";return false;}

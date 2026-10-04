@@ -1,6 +1,6 @@
 # Core Phase 2 服务契约
 
-本页描述当前实现，不代表真实客户端验收已完成。验收记录见 `PHASE2_TEST_REPORT.md`。旧 API 1.0 的 96 字节函数表和 Module ABI 1.0 布局不变，旧资产 feature bits 保持 0。新增独立 `EternalCore.Phase2Api` 1.1 服务，240 字节函数表；底层依然是稳定 C ABI。
+本页描述当前实现，不代表真实客户端验收已完成。验收记录见 `PHASE2_TEST_REPORT.md`。旧 API 1.0 的 96 字节函数表和 Module ABI 1.0 布局不变，旧资产 feature bits 保持 0。独立 `EternalCore.Phase2Api` 扩展至 1.2，保留完整 240 字节 1.1 前缀，在尾部追加三个函数，完整表为 264 字节；底层依然是稳定 C ABI。
 
 ## 公开服务
 
@@ -15,6 +15,8 @@
 | submit_mutation | 经 TransactionService 执行增减、转账、角色变更 |
 | poll_receipt_v2 | 从持久记录还原结果，不能依赖进程内缓存 |
 | read_outbox | 带权限和持久 cursor 的事件读取，不等同消费确认 |
+| register_command_route / unregister_command_route | 为当前真实模块绑定登记和撤销受限命令路由 |
+| authorize_invocation | 从 Core 签发的真实调用取得限定 Capability；不接受自报主体 |
 
 正式能力保持关闭，直到对应真实链路验收通过。开发验证命令是单独的可信引擎入口，不能成为普通模块 API 的降级路径。公开示例的 developmentValidation 和 validatedAssets 均为 false；当前版本拒绝 validatedAssets=true，不允许用配置伪装已验收。
 
@@ -23,6 +25,12 @@
 `core.native.ingress` 是 Host 私有协议，128 字节表，只供薄引擎适配层使用。所有通过模块上下文发起的 `core.native.*` 查询一律拒绝。业务模块不能取得 nonce，不能自造认证玩家或发行 Capability。Host 自己的 C++ 查询入口仍是可信内部接口。
 
 Host 从实际模块描述符和 Enable 代次建立绑定；Core 将声明能力与私有批准清单相交，未批准模块默认拒绝。Host 提供协议上界，实际金额、权限、预算和主体授权仍由 Core 控制。服务返回专属函数表与上下文，不向业务消费者返回未绑定的公共发现表。
+
+客户端发现服务必须明确请求本次 Enable 所需的非零模块能力。路由仅能由相应 CallerContext 登记。真实认证玩家执行 `ecore native invoke <moduleId> <routeId> <arguments>` 时，Core 向该绑定的同步回调交付 Invocation；输入参数不能指定 actor、XUID 或 Owner。公共授权接口从不可猜的 Invocation token 解析主体，再检查路线动作范围、当前角色、会话、模块代次、金额及预算。回调返回后不能再申请新票据；已签发票据继续受有效期与撤销检查约束。
+
+默认 C++ 客户端不使用开发功能位。独立验证模块必须显式选择 DevelopmentValidation，Core 同时检查私人开发开关和从真实调用签出的开发票据；客户端选项本身不提供权限。正式功能位仍为 0，其他模块不能用伪造参数开启资产服务。验证模块单独打包，正式 Eternal 包不包含它。
+
+兼容边界：保留 1.1 字段布局不等于旧辅助类二进制可直接运行。早期 1.1 `Phase2Client` 请求零能力并要求表大小恰好为 240，不能正确完成真实绑定。该辅助类须用当前 SDK 重新编译，显式声明所需能力；不为零审批请求增加授权 fallback。正常使用大小/版本检查的非零能力 1.1 C 前缀查询继续由 Host 验证。
 
 Scope 包含模块、Core 实例、玩家在线会话、身份/权限版本、动作、目标、资产、金额和预算。授权票据使用系统随机源，最多有效 60 秒，使用 Core 的单调时钟。Role 撤销、断线、模块停用、Core 停用和过期均在执行入口重新校验。名字只作显示和无歧义目标选择；Owner 不通过名字或 OP 判断。
 
@@ -42,4 +50,4 @@ Pending/Reconciliation 仅为后续实物交付契约草案。BDS 背包不在 S
 
 活动配置位于 `Eternal/config/core/core.json`，公开模板是 `core.example.json`。Owner 为私人稳定 XUID，禁止上传；新测试库从零开始，不导入旧玩家经济数据。没有 Core 配置时只提供健康诊断，不推断首位玩家是服主。配置错误、Owner 不一致或未知数据库版本拒绝启动。
 
-Disable 先关闭适配入口、撤销上下文/票据/待处理表单，再回收服务和订阅。重新 Enable 必须重新发现服务和绑定代次。原 Phase 1.5 的服务器线程与终止清理限制保持不变。
+Disable 先关闭适配入口、撤销上下文/票据/路由/待处理表单，再回收服务和订阅。重新 Enable 必须重新发现服务和绑定代次。可信引擎调用持有 Host 的回调保护；回调尚在执行时拒绝重入停用或卸载。原 Phase 1.5 的服务器线程与终止清理限制保持不变。

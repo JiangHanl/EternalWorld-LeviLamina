@@ -47,11 +47,12 @@ struct Provider {
         api.get_phase2_features=features;api.read_identity_v2=identity;api.read_roles=roles;
         api.check_permission=permission;api.read_asset=asset;api.submit_mutation=submit;
         api.poll_receipt_v2=receipt;api.read_outbox=outbox;
+        api.register_command_route=registerRoute;api.unregister_command_route=unregisterRoute;api.authorize_invocation=invocation;
         host=output<EmHostContext>();host.abi_major=EM_ABI_MAJOR;host.abi_minor=EM_ABI_MINOR;
         host.instance=this;host.query_service=query;
     }
     Phase2Client client() {
-        Phase2Client value;require(Phase2Client::discover(host,value)==EM_OK,"valid discovery");return value;
+        Phase2Client value;require(Phase2Client::discover(host,EC_MODULE_CAP_ALL,value)==EM_OK,"valid discovery");return value;
     }
     EcPhase2MutationRequest mutation()const {
         EcPhase2MutationRequest request{};
@@ -74,6 +75,7 @@ struct Provider {
         const auto name=eternal::sdk::text(request->id);
         if(name.starts_with("core.native."))return EM_UNSUPPORTED;
         if(name!=EC_PHASE2_SERVICE_ID)return EM_NOT_FOUND;
+        if(!request->required_capabilities)return EM_INVALID_ARGUMENT;
         if(p.queryResult!=EM_OK)return p.queryResult;
         *out=output<EmServiceReference>();out->struct_size=p.referenceSize;out->reserved=p.referenceReserved;
         out->table=&p.api;out->table_size=p.tableSize;out->api_major=p.api.api_major;
@@ -94,6 +96,16 @@ struct Provider {
         out->implemented=p.implemented;out->development_only=p.development;
         out->instance_epoch=p.featureEpoch;out->lifecycle=p.lifecycle;
         out->domain_thread_model=EC_THREAD_DOMAIN_GAME_THREAD;out->reserved[0]=p.featureReserved;return EC_OK;
+    }
+    static EcStatus EC_CALL registerRoute(const EcPhase2CommandRouteRequest* request)noexcept {
+        return request->struct_size==sizeof(*request)&&request->struct_version==1&&same(request->caller_context,active->api.caller_context)?EC_OK:EC_DENIED;
+    }
+    static EcStatus EC_CALL unregisterRoute(const EcPhase2RouteRemovalRequest* request)noexcept {
+        return request->struct_size==sizeof(*request)&&same(request->caller_context,active->api.caller_context)?EC_OK:EC_DENIED;
+    }
+    static EcStatus EC_CALL invocation(const EcPhase2InvocationAuthorization* request,EcPhase2InvocationGrant* out)noexcept {
+        if(!same(request->caller_context,active->api.caller_context)||!same(request->invocation,{7,8}))return EC_DENIED;
+        *out=output<EcPhase2InvocationGrant>();out->capability=active->issued;out->subject=active->target;return EC_OK;
     }
     static EcStatus EC_CALL identity(const EcPhase2QueryRequest* request,EcPhase2IdentitySnapshot* out,EcUtf8Buffer* name)noexcept {
         auto& p=*active;auto status=p.authorize(request->meta,sizeof(*request));if(status!=EC_OK)return status;
@@ -164,24 +176,46 @@ int main() {
         },count);
         test("missing service resets previous client",[]{
             Provider p;auto c=p.client();p.queryResult=EM_NOT_FOUND;
-            require(Phase2Client::discover(p.host,c)==EM_NOT_FOUND,"missing service");
+            require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_NOT_FOUND,"missing service");
             EcPhase2FeatureInfo f{};require(c.features(f)==EC_NOT_READY,"old pointer discarded");
         },count);
         test("reference and function table validation",[]{
             Provider p;Phase2Client c;
-            p.tableSize=sizeof(p.api)-1;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"short reference");
-            p.tableSize=sizeof(p.api);p.referenceReserved=1;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"reserved reference");
-            p.referenceReserved=0;p.referenceSize=0;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"invalid reference header");
-            p.referenceSize=sizeof(EmServiceReference);p.api.api_major=2;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"wrong major");
-            p.api.api_major=1;p.api.api_minor=0;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"old minor");
-            p.api.api_minor=1;p.api.v1_0.struct_size=104;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"legacy layout changed");
-            p.api.v1_0.struct_size=96;p.api.reserved[0]=1;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"reserved table");
-            p.api.reserved[0]=0;p.api.submit_mutation=nullptr;require(Phase2Client::discover(p.host,c)==EM_ABI_MISMATCH,"missing method");
+            p.tableSize=sizeof(p.api)-1;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"short reference");
+            p.tableSize=sizeof(p.api);p.referenceReserved=1;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"reserved reference");
+            p.referenceReserved=0;p.referenceSize=0;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"invalid reference header");
+            p.referenceSize=sizeof(EmServiceReference);p.api.api_major=2;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"wrong major");
+            p.api.api_major=1;p.api.api_minor=0;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"old minor");
+            p.api.api_minor=EC_PHASE2_API_MINOR;p.api.v1_0.struct_size=104;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"legacy layout changed");
+            p.api.v1_0.struct_size=96;p.api.reserved[0]=1;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"reserved table");
+            p.api.reserved[0]=0;p.api.submit_mutation=nullptr;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"missing method");
         },count);
         test("production zero never falls back to development",[]{
             Provider p;auto c=p.client();p.enabled=0;p.development=EC_P2_FEATURE_ALL;
             EcPhase2Submission out{};require(c.submit(p.mutation(),out)==EC_UNSUPPORTED,"development is not production");
             require(p.calls==0&&p.commits==0,"no provider mutation");
+        },count);
+        test("explicit discovery capabilities and 1.2 tail required",[]{
+            Provider p;Phase2Client c;require(Phase2Client::discover(p.host,0,c)==EM_INVALID_ARGUMENT&&p.queryCount==0,"No empty approval request");
+            require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL+1,c)==EM_INVALID_ARGUMENT,"Unknown capability bits");
+            p.api.authorize_invocation=nullptr;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_ABI_MISMATCH,"Missing new tail method");
+        },count);
+        test("development validation requires explicit consumer opt-in",[]{
+            Provider p;auto c=p.client();p.enabled=0;p.development=EC_P2_FEATURE_ALL;EcPhase2Submission out{};
+            require(c.submit(p.mutation(),out)==EC_UNSUPPORTED&&p.calls==0,"Default refuses development");
+            c.setDevelopmentValidation(true);auto request=p.mutation();request.meta.capability={1001,1002};
+            require(c.submit(request,out)==EC_DENIED&&p.commits==0,"Opt-in cannot authorize forged grant");
+            require(c.submit(p.mutation(),out)==EC_OK&&p.commits==1,"Explicit opt-in sends Core issued grant");
+            require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_OK&&c.submit(p.mutation(),out)==EC_UNSUPPORTED,"Rediscovery resets development opt-in");
+        },count);
+        test("route APIs stamp scoped context without minting actor",[]{
+            Provider p;auto c=p.client();p.enabled=0;EcPhase2CommandRouteRequest route{};
+            require(c.registerRoute(route)==EC_OK,"Route registration independent of asset flags");
+            route.caller_context={91,92};require(c.registerRoute(route)==EC_DENIED,"Cannot register as another module");
+            EcPhase2InvocationAuthorization request{};request.invocation={7,8};EcPhase2InvocationGrant grant{};
+            require(c.authorize(request,grant)==EC_OK&&same(grant.capability,p.issued)&&same(grant.subject,p.target),"Provider-issued invocation forwarding");
+            request.invocation={70,80};require(c.authorize(request,grant)==EC_DENIED,"Self-made invocation not minted");
+            EcPhase2RouteRemovalRequest removal{};require(c.unregisterRoute(removal)==EC_OK,"Scoped removal forwarding");
         },count);
         test("shared table cannot create a caller binding",[]{
             Provider p;p.api.caller_context={};auto c=p.client();EcPhase2Submission out{};
@@ -264,7 +298,7 @@ int main() {
         test("new generation rediscovery rejects prior token",[]{
             Provider p;auto c=p.client();auto oldRequest=p.mutation();c.reset();
             p.previous=p.issued;p.issued={501,502};p.api.caller_context={33,44};++p.api.caller_generation;
-            ++p.api.instance_epoch;p.featureEpoch=p.api.instance_epoch;require(Phase2Client::discover(p.host,c)==EM_OK,"new generation discover");
+            ++p.api.instance_epoch;p.featureEpoch=p.api.instance_epoch;require(Phase2Client::discover(p.host,EC_MODULE_CAP_ALL,c)==EM_OK,"new generation discover");
             EcPhase2Submission out{};require(c.submit(oldRequest,out)==EC_REVOKED&&p.commits==0,"old grant cannot cross generation");
             require(c.submit(p.mutation(),out)==EC_OK,"newly issued scope");
         },count);

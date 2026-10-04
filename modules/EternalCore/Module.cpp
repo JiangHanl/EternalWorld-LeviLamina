@@ -91,8 +91,11 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Enable() noexcept {
 extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Disable() noexcept {
     try {
         // Revoke every public method before Host removes this provider's registry entry.
+        if (runtime) {
+            const auto result = runtime->disable();
+            if (result != EM_OK) return result;
+        }
         eternal::native::setLifecycle(EC_LIFECYCLE_DRAINING);
-        if (runtime) runtime->disable();
         enabled = false;
         eternal::native::setLifecycle(EC_LIFECYCLE_STOPPED);
         return EM_OK;

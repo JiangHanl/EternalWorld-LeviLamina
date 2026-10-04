@@ -1,4 +1,4 @@
-# EternalSDK / Module ABI 1.0 / Core API 1.0 + 1.1
+# EternalSDK / Module ABI 1.0 / Core API 1.0 + 1.2
 
 SDK 是编译期头文件与本模块内 C++ 辅助，不是运行时插件，不加载 LL、脚本引擎或数据库。EternalHost 是唯一交给 LeviLamina 加载的 DLL；Host 按配置加载八个内部模块。内部模块只使用 SDK 公共接口，不能包含 Host/其他模块私有源码。
 

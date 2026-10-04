@@ -21,4 +21,4 @@ UI 页面由业务拥有，公共导航/组件契约统一，Presentation 渲染
 
 提交前运行自身测试与 Test-Release，并更新对应状态/变更记录。新增依赖须锁版本/摘要、保存上游许可证并复核发布包；未经确认的复制代码是公开阻塞项。
 
-Phase 2 服务发现须声明 Core 依赖和实际所需 capability；第一次查询包含本次 Enable 要使用的完整声明能力，后续可复用子集。Core 另外检查私人批准清单，描述符本身不授予玩家或资产权限。只使用公开 1.1 表与 Core 签发的票据，不能查询 `core.native.*` 或复制测试专属 issuer。当前生产 feature bits 仍为 0，正式业务不得用开发诊断入口降级执行。
+Phase 2 服务发现须声明 Core 依赖和实际所需 capability；第一次查询包含本次 Enable 要使用的完整非零声明能力，后续可复用子集。Core 另外检查私人批准清单，描述符本身不授予玩家或资产权限。使用公开 1.2 路由登记接口接收 Core 签出的 Invocation，再申请受限 Capability；不能查询 `core.native.*`、自报 actor 或复制测试专属 issuer。Invocation、arguments 和回调输出缓冲区只在本次同步回调有效；回调返回后不得再申请新票据。Disable 先停止接收新调用，撤销路由并等待本模块回调结束后才释放 user；Host 先撤销绑定的顺序也必须正确处理。当前生产 feature bits 仍为 0，正式业务不得用开发诊断入口降级执行。独立 `CoreValidationModule` 仅验证 SDK，单独 Artifact，不属于正式业务模块。

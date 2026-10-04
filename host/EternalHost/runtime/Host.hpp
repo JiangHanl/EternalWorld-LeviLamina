@@ -51,6 +51,20 @@ public:
 using LogSink = std::function<void(uint32_t, std::string_view)>;
 class Host final {
 public:
+    // Trusted native adapter calls retain the same teardown exclusion as events.
+    // This C++ guard is deliberately absent from the public Module ABI.
+    class TrustedDispatch final {
+        friend class Host;
+        Host* host_{};
+        explicit TrustedDispatch(Host* host) noexcept : host_(host) {}
+    public:
+        ~TrustedDispatch();
+        TrustedDispatch(TrustedDispatch&& other) noexcept;
+        TrustedDispatch(const TrustedDispatch&) = delete;
+        TrustedDispatch& operator=(const TrustedDispatch&) = delete;
+        TrustedDispatch& operator=(TrustedDispatch&&) = delete;
+        explicit operator bool() const noexcept { return host_ != nullptr; }
+    };
     explicit Host(std::unique_ptr<LibraryLoader> loader = {}, LogSink log = {});
     ~Host();
     Host(const Host&) = delete;
@@ -63,6 +77,8 @@ public:
     // Not available to modules; all subsequent calls stay on the bound thread.
     bool bindFirstEnableThread(std::string& error);
     bool onBoundThread() const noexcept;
+    [[nodiscard]] TrustedDispatch guardTrustedDispatch() noexcept;
+    bool isDispatching() const noexcept;
     // Trusted adapter's terminal stop only: the saved Windows server-thread
     // handle must prove that thread has exited. Stops and unloads modules,
     // permanently rejects Load/Enable, and never makes ordinary Disable migrate.

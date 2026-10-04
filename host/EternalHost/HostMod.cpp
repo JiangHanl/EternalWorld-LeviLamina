@@ -146,6 +146,10 @@ bool HostMod::enable() {
 
 bool HostMod::disable() {
     try {
+        if (host_.onBoundThread() && host_.isDispatching()) {
+            self_.getLogger().warn("EternalHost disable refused while a trusted callback is active");
+            return false;
+        }
         if (native_) native_->disable();
         if (!host_.onBoundThread() && ll::getGamingStatus() == ll::GamingStatus::Stopping) {
             // LL disables mods before leaveGameSync joins the server thread.
