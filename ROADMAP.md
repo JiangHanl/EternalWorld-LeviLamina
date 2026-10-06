@@ -18,4 +18,4 @@
 
 所有阶段采用 [七类测试策略](TESTING.md)。内部验证与云 Artifact 回归全部通过可继续下一阶段；真实客户端缺项保持 DEFERRED_REAL_CLIENT，生产为 PENDING REAL CLIENT。公开 Beta / 正式开服前统一执行 [人工门槛](PRE_RELEASE_CHECKLIST.md)。
 
-Phase1.5已分别验收本地产物与实际Windows云Artifact的两次BDS运行和终止清理。七个业务模块仍为PLANNED且默认禁用，Core资产API保持UNSUPPORTED；完成基础加载和工程化不表示后续业务阶段已实现。
+Phase1.5已分别验收本地产物与实际Windows云Artifact的两次BDS运行和终止清理。除已进入 Phase 3 实施的 EternalCommerce 外，其余六个业务模块仍为PLANNED且默认禁用；Core资产API保持UNSUPPORTED，完成基础加载和工程化不表示后续业务阶段已实现。

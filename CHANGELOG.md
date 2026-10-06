@@ -1,14 +1,22 @@
 # 变更记录
 
-## Unreleased · Phase 2 实现与验收
+## Unreleased · Phase 3 Commerce
+
+- `EternalCommerce` 从 PLANNED 桩升级为真实模块，声明 Core 依赖与能力，实现 Load/Enable/Disable/Unload 与 Core 服务发现。
+- 五个业务域与编号迁移：伴礼（3—20 人、10 两起、2% 费、300 秒）、转账税（每日免税 1000 两 + 分档税率）、寄售（并发购买、7 天退回、NBT/中文名）、收购（每日配额 + 衰减）、交付 Pending/Reconciliation。
+- Core 授权写入闭环：transfer / gift / list / buy 四条 Invocation 路由 + 交付后台消费者（register/query/ack/retry + eventId 去重）。
+- 验证变体 `EternalCommerceValidation.dll`；生产 feature bits 保持 0，资产变更只在验证构建下经 REAL_DLL 测试。
+- 23 组域测试 + 4 组 REAL_DLL 闭环测试，本地便携套件与云 CI 全绿。详见 [Phase 3 计划](docs/PHASE3_PLAN.md) 与 [交接文档](docs/HANDOFF.md)。
+
+## Unreleased · Phase 2 实现与验收（DEVELOPMENT COMPLETE）
 
 - 保留 Phase 1.5 源码与 CI 基线，创建本地保护标签；原历史报告不改写。
 - 新增编号 002 迁移、稳定身份与显示名版本、独立职司权限、账户版本、持久拒绝回执及有限审计、每消费者 Outbox 与恢复。
 - 保留旧 Core API 1.0 / Module ABI 1.0，独立 Core API 1.2 保留 1.1 前缀并新增可信 Invocation 路由；Host 私有认证接入不向业务模块公开，业务查询只返回绑定真实模块的专属上下文。
 - Host 薄适配层复制 BDS 已认证 Player 输入并渲染 Core 验证表单；不通过名字、表单字段或原生 OP 授权。
-- 新增 SDK、Runtime、Host bridge 与域回归；具体 PASS / NOT RUN 以 Phase 2 报告为准。生产资产继续关闭，未开始七个业务模块。
-- SDK 1.2 源码 8cf831f 的云 CI 37217978119 通过；12 套测试、152 组计数用例通过。正式与独立验证 Artifact 已下载核验，云 DLL 通过两轮真实 BDS 生命周期回归；真实玩家验收另行记录。
-- 真实服主完成资产/幂等/拒绝回执、公开 SDK 与过期页面验收；内部 91 组安全回归与真实交易后服务器恢复通过。临时 Fixture 已撤下、开发资产入口关闭；未取得证据的真实多账号/重连/消费者项目保持 NOT RUN，未进入 Phase 3。
+- 新增 SDK、Runtime、Host bridge 与域回归；具体 PASS / NOT RUN 以 Phase 2 报告为准。生产资产继续关闭。
+- SDK 1.3 云 CI 通过：八身份合成集成、真实 DLL 消费者/崩溃重放与生产隔离；两个 Artifact 已下载核验，云正式 DLL 通过两轮真实 BDS 生命周期回归；真实玩家验收另行记录。
+- 真实服主完成资产/幂等/拒绝回执、公开 SDK 与过期页面验收；内部 91 组安全回归与真实交易后服务器恢复通过。临时 Fixture 已撤下、开发资产入口关闭；未取得证据的真实多账号/重连/消费者项目保持 NOT RUN。生产状态为 PENDING REAL CLIENT。
 
 ## Unreleased · Phase 1.5工程化验收完成
 

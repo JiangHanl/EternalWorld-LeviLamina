@@ -4,9 +4,9 @@
 
 A native C++ server project for Minecraft Bedrock Dedicated Server and LeviLamina. The target architecture has one thin loader, **EternalHost**, eight internal native modules, and an EternalSDK exposing a versioned C ABI with C++ helpers. Only the Host integrates with the engine; modules own separate business responsibilities and communicate through published interfaces.
 
-Phase 1.5 engineering acceptance is complete; its [Windows CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) and real BDS records are preserved. Phase 2 is completing automated acceptance for identity, permissions, capabilities, Money/Reputation, durable receipts, audit and public consumer APIs. See the [separate report](docs/PHASE2_TEST_REPORT.md). Production asset feature bits remain zero; seven business modules remain PLANNED and disabled. Complete survival gameplay has not been delivered. [Seven test categories](TESTING.md) separate daily automation from [pre-release client gates](PRE_RELEASE_CHECKLIST.md); deferred client checks do not block a sufficiently verified development Phase.
+Phase 1.5 engineering acceptance is complete; its [Windows CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) and real BDS records are preserved. Phase 2 is **DEVELOPMENT COMPLETE**: identity, permissions, capabilities, Money/Reputation, durable receipts, audit and public consumer APIs (independent Core API 1.3); see the [report](docs/PHASE2_TEST_REPORT.md). Phase 3 (Commerce: banking/tax/gifts/acquisition/listings/delivery) is in progress with five business domains and an authorized Core write loop; see the [plan](docs/PHASE3_PLAN.md) and [handoff](docs/HANDOFF.md). Production asset feature bits remain zero; `EternalCommerce` is now a real module (still disabled by default), while the other six business modules remain PLANNED. Complete survival gameplay has not been delivered. [Seven test categories](TESTING.md) separate daily automation from [pre-release client gates](PRE_RELEASE_CHECKLIST.md).
 
-The Phase 2 SDK 1.2 [cloud CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119) passed 12 executable suites, 152 counted groups and dual-language layout checks. Both artifacts were downloaded and hash-verified; cloud DLLs passed two real BDS lifecycle runs. Authenticated-player identity, permission and asset acceptance is recorded separately and cannot be replaced by CI.
+The Phase 2 SDK 1.3 cloud CI passed SDK/domain/synthetic integration, real-DLL consumer/crash-replay and production-isolation checks. Both artifacts were downloaded and hash-verified; cloud DLLs passed two real BDS lifecycle runs. Authenticated-player identity, permission and asset acceptance is recorded separately and cannot be replaced by CI.
 
 - [Status](CURRENT_STATUS.md) and [test report](TEST_REPORT.md): verified scope and missing work.
 - [Architecture](ARCHITECTURE.md), [build](BUILD.md) and [dependencies](DEPENDENCY.md): boundaries and pinned toolchain.
@@ -41,7 +41,7 @@ Host handles discovery, dependency resolution, ABI/capability checks, lifecycle,
 | EternalPresentation | UI, themes, HUD, MOTD, poetry and particles |
 | EternalEncounters | Bosses, combat attribution and reward requests |
 
-Core provides Phase 2 infrastructure and development acceptance entry points; production asset APIs remain gated. All seven business modules are **PLANNED / NOT IMPLEMENTED** and disabled by default.
+Core provides Phase 2 infrastructure and development acceptance entry points; production asset APIs remain gated. `EternalCommerce` has entered Phase 3 (transfer tax, gifts, listings, acquisition and delivery domains), still disabled by default; the other six modules are **PLANNED / NOT IMPLEMENTED**.
 
 ## SDK and development
 
@@ -53,7 +53,7 @@ Start with the [template](templates/EternalModule/README.md), [SDK](sdk/EternalS
 
 1. Obtain BDS **1.26.51.1** and LeviLamina **26.51.6** separately under their own terms.
 2. Download `EternalWorld-windows-x64` from a successful [Windows Actions build](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/workflows/build.yml). Verify the ZIP against its `.sha256`, then place `Eternal/` inside `plugins/`.
-3. Copy `config/modules.example.json` to `config/modules.json`. Core is mandatory; keep the seven skeleton modules disabled. Fill private `config/core/core.json` only with a verified stable Owner identity. The empty Owner example is not an active configuration. Missing Core configuration allows health diagnostics only and never makes the first player Owner. Development validation and production assets default to disabled.
+3. Copy `config/modules.example.json` to `config/modules.json`. Core is mandatory; keep the other skeleton modules disabled (including Commerce unless entering Phase 3 acceptance). Fill private `config/core/core.json` only with a verified stable Owner identity. The empty Owner example is not an active configuration. Missing Core configuration allows health diagnostics only and never makes the first player Owner. Development validation and production assets default to disabled.
 4. Verify `ecore status`, `ecore selfcheck`, `eternal status` and `ll list`; the latter should list only Eternal. Stop gracefully before replacing DLLs. Preserve existing configuration and data.
 
 The [deployment helper](tools/Deploy-Host.ps1) copies local products and initializes active configuration only when missing. The [example](config/modules.example.json) contains no operator identity.

@@ -21,7 +21,7 @@ Host 使用官方 LL 版本匹配的 clang-cl/MSVC ABI、C++20、动态 CRT 及 
 
 检查 DLL 导出、导入和实例握手；确保只有 Host 为 LL 插件，内部模块可被 Host 验证且无旧运行时依赖。部署必须停服，不覆盖已加载 DLL。真实 BDS 回归包括加载、诊断、依赖错误、停用/恢复、正常 stop、完整重启；玩家功能另有客户端验收。
 
-运行包使用显式 allowlist，仅包含自研 Host与八个内部DLL、配置示例和许可证通知；SDK公共头与开发说明保留在源码仓库。配置示例在包内 Eternal/config/modules.example.json：Core必需并默认启用，其余七个PLANNED模块默认停用。不要把所有enabled改为true当作业务实现完成。
+运行包使用显式 allowlist，仅包含自研 Host与八个内部DLL、配置示例和许可证通知；SDK公共头与开发说明保留在源码仓库。配置示例在包内 Eternal/config/modules.example.json：Core必需并默认启用，其余业务模块默认停用（EternalCommerce 已进入 Phase 3 实施，其余六个仍 PLANNED）。不要把所有enabled改为true当作业务实现完成。
 
 不得递归复制 server、.deps、世界、玩家数据、日志、运营配置、微软工具链或原版资源。PDB/构建 receipt 保留为本地证据，未审查路径与来源前不进入公开包。
 

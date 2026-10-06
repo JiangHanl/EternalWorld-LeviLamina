@@ -4,9 +4,9 @@
 
 以 Minecraft Bedrock Dedicated Server 与 LeviLamina 为运行环境的原生 C++ 服务器工程。目标架构是一个薄加载插件 **EternalHost**、八个内部原生模块，以及面向开发者的 EternalSDK C/C++ 接口。Host 接触引擎；模块按业务职责拆分，通过版本化接口协作。
 
-Phase 1.5 工程化验收已完成，原 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 和真实 BDS 记录保留。Phase 2 正在完成自动化收尾：身份、权限、Capability、Money/Reputation、拒绝回执、审计与正式消费者接口；具体范围见 [独立报告](docs/PHASE2_TEST_REPORT.md)。正式资产 feature bits 保持 0，七个业务模块仍为 PLANNED 并默认禁用；完整生存玩法尚未交付。日常开发采用 [七类测试](TESTING.md)，人工客户端缺项集中 [开服前验收](PRE_RELEASE_CHECKLIST.md)，不阻塞内部验证充分的 Phase。
+Phase 1.5 工程化验收已完成，原 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 和真实 BDS 记录保留。Phase 2 已标记 **DEVELOPMENT COMPLETE**：身份、权限、Capability、Money/Reputation、拒绝回执、审计与正式消费者接口（独立 Core API 1.3）；范围见 [独立报告](docs/PHASE2_TEST_REPORT.md)。Phase 3（Commerce：钱庄/税/伴礼/收购/寄售/交付）正在实施，五个业务域与 Core 授权写入闭环已落地，见 [计划](docs/PHASE3_PLAN.md) 与 [交接](docs/HANDOFF.md)。正式资产 feature bits 保持 0，`EternalCommerce` 已是真实模块（默认仍关闭），其余六个业务模块仍为 PLANNED；完整生存玩法尚未交付。日常开发采用 [七类测试](TESTING.md)，人工客户端缺项集中 [开服前验收](PRE_RELEASE_CHECKLIST.md)。
 
-Phase 2 SDK 1.2 的 [云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119) 已通过，12 套测试、152 组计数用例及双语言布局检查通过。云 Artifact 已实际下载核验，云 DLL 完成两轮真实 BDS 启停回归；真实玩家身份、权限与资产验收单独记录，不能由 CI 替代。
+Phase 2 SDK 1.3 的云 CI 已通过：SDK/域/合成集成、真实 DLL 消费者/崩溃重放与生产隔离全部覆盖；两个 Artifact 已下载核验，云正式 DLL 完成两轮真实 BDS 启停回归。真实玩家身份、权限与资产验收单独记录，不能由 CI 替代。
 
 | 入口 | 内容 |
 |---|---|
@@ -44,7 +44,7 @@ Host 只负责发现、依赖解析、ABI/能力检查、生命周期、Service 
 | EternalPresentation | UI、主题、HUD、MOTD、诗笺与粒子 |
 | EternalEncounters | Boss、战斗归因与奖励请求 |
 
-Core 当前提供 Phase 2 基础设施及开发验收入口，生产资产 API 尚未开放；其余七项均为 **PLANNED / NOT IMPLEMENTED**，默认关闭。
+Core 当前提供 Phase 2 基础设施及开发验收入口，生产资产 API 尚未开放。`EternalCommerce` 已进入 Phase 3 实施（含转账税、伴礼、寄售、收购与交付域），默认仍关闭；其余六项均为 **PLANNED / NOT IMPLEMENTED**。
 
 ## SDK 与开发
 
@@ -56,7 +56,7 @@ Core 当前提供 Phase 2 基础设施及开发验收入口，生产资产 API �
 
 1. 单独准备合法取得的 BDS **1.26.51.1** 与 LeviLamina **26.51.6**；本仓库不分发它们。
 2. 从通过的 [Windows Actions 构建](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/workflows/build.yml) 下载 `EternalWorld-windows-x64` Artifact，校验 ZIP 对应的 `.sha256`，将 `Eternal/` 放入服务端 `plugins/`。
-3. 将 `config/modules.example.json` 复制为 `config/modules.json`。Core 必须启用，七个业务骨架保持关闭。只有掌握经认证的服主稳定身份后才填写私人 `config/core/core.json`；空 Owner 示例不能用作活动配置。缺少 Core 配置时仅健康诊断，不自动选择首位玩家。开发验证和生产资产默认关闭。
+3. 将 `config/modules.example.json` 复制为 `config/modules.json`。Core 必须启用，其余业务骨架保持关闭（含 Commerce，除非明确进入 Phase 3 验收）。只有掌握经认证的服主稳定身份后才填写私人 `config/core/core.json`；空 Owner 示例不能用作活动配置。缺少 Core 配置时仅健康诊断，不自动选择首位玩家。开发验证和生产资产默认关闭。
 4. 启动后检查 `ecore status`、`ecore selfcheck`、`eternal status`、`ll list`；后者应只列出 Eternal。替换 DLL 前正常 `stop`，更新保留配置与数据。
 
 [部署工具](tools/Deploy-Host.ps1) 可复制本地构建，并仅在缺失时创建活动配置；[配置示例](config/modules.example.json) 不含运营者身份。
