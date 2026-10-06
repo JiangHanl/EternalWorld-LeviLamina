@@ -1,6 +1,8 @@
 #include "EternalSDK/Core/Phase2Client.hpp"
 #include "domain/Commerce.hpp"
+#include <charconv>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -25,17 +27,107 @@ Phase2Client client;
 std::unique_ptr<eternal::commerce::Commerce> commerce;
 bool loaded{}, enabled{};
 
-EcStatus EM_CALL onTransfer(void *, const EcPhase2Invocation *invocation,
-                            EcUtf8Buffer *reply) noexcept {
-    if (!invocation || !reply || !reply->data || !reply->capacity)
-        return EC_INVALID_ARGUMENT;
-    static constexpr char message[] = "Commerce transfer: business features disabled";
-    const auto length = static_cast<uint32_t>(sizeof(message));
-    if (reply->capacity < length)
+bool zero(EcId128 value) { return value.low == 0 && value.high == 0; }
+std::string hex128(EcId128 value) {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string out(32, '0');
+    for (int i = 0; i < 16; ++i) {
+        out[i] = digits[(value.high >> ((15 - i) * 4)) & 15];
+        out[16 + i] = digits[(value.low >> ((15 - i) * 4)) & 15];
+    }
+    return out;
+}
+int hexValue(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+EcId128 parse128(std::string_view value) {
+    EcId128 out{};
+    if (value.size() != 32)
+        return out;
+    for (int i = 0; i < 16; ++i) {
+        const int a = hexValue(value[i]);
+        const int b = hexValue(value[16 + i]);
+        if (a < 0 || b < 0)
+            return {};
+        out.high = (out.high << 4) | static_cast<uint64_t>(a);
+        out.low = (out.low << 4) | static_cast<uint64_t>(b);
+    }
+    return out;
+}
+std::int64_t wall() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+EcStatus replyText(EcUtf8Buffer *reply, const char *message, EcStatus status) {
+    const auto length = static_cast<uint32_t>(std::strlen(message) + 1);
+    if (!reply->data || reply->capacity < length)
         return EC_BUFFER_TOO_SMALL;
     std::memcpy(reply->data, message, length);
     reply->required = length;
-    return EC_UNSUPPORTED;
+    return status;
+}
+
+EcStatus EM_CALL onTransfer(void *, const EcPhase2Invocation *invocation,
+                            EcUtf8Buffer *reply) noexcept {
+    try {
+    if (!invocation || !reply || !reply->data || !reply->capacity)
+        return EC_INVALID_ARGUMENT;
+        if (!commerce)
+            return replyText(reply, "Commerce not ready", EC_NOT_READY);
+        const std::string_view args(invocation->arguments.data, invocation->arguments.length);
+        const auto space = args.find(' ');
+        if (space != 32)
+            return replyText(reply, "usage: transfer <recipientId32> <amountMinor>",
+                             EC_INVALID_ARGUMENT);
+        const auto recipient = parse128(args.substr(0, 32));
+        std::int64_t amount = 0;
+        const auto amountText = args.substr(space + 1);
+        const auto parsed =
+            std::from_chars(amountText.data(), amountText.data() + amountText.size(), amount);
+        if (zero(recipient) || parsed.ec != std::errc{} ||
+            parsed.ptr != amountText.data() + amountText.size() || amount <= 0)
+            return replyText(reply, "invalid recipient or amount", EC_INVALID_ARGUMENT);
+        const auto senderUuid = hex128(invocation->subject);
+        const auto transfer = commerce->recordTransfer(senderUuid, amount,
+                                                       hex128(invocation->request_id), wall());
+        if (transfer.status != eternal::commerce::Status::Ok)
+            return replyText(reply, "Commerce transfer rejected", EC_DENIED);
+        EcPhase2InvocationAuthorization auth{};
+        auth.invocation = invocation->invocation;
+        auth.target = invocation->subject;
+        auth.recipient = recipient;
+        auth.operation = EC_P2_OP_TRANSFER;
+        auth.asset = EC_P2_ASSET_MONEY;
+        auth.minor_units = transfer.netMinor;
+        EcPhase2InvocationGrant grant{};
+        auto status = client.authorize(auth, grant);
+        if (status != EC_OK)
+            return replyText(reply, "Commerce authorize denied", status);
+        EcPhase2MutationRequest mutation{};
+        mutation.meta.capability = grant.capability;
+        mutation.meta.request_id = invocation->request_id;
+        mutation.meta.idempotency_key = invocation->request_id;
+        mutation.target = invocation->subject;
+        mutation.recipient = recipient;
+        mutation.operation = EC_P2_OP_TRANSFER;
+        mutation.asset = EC_P2_ASSET_MONEY;
+        mutation.minor_units = transfer.netMinor;
+        mutation.reason = ecView("Commerce transfer");
+        EcPhase2Submission submission{};
+        status = client.submit(mutation, submission);
+        if (status != EC_OK)
+            return replyText(reply, "Commerce submit denied", status);
+        return replyText(reply, "Commerce transfer accepted", EC_OK);
+    } catch (...) {
+        return EC_INTERNAL_ERROR;
+    }
 }
 } // namespace
 
@@ -64,6 +156,9 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Enable() noexcept {
         const auto discovered = Phase2Client::discover(host, caps, client);
         if (discovered != EM_OK)
             return discovered;
+#ifdef ETERNAL_COMMERCE_VALIDATION_BUILD
+        client.setDevelopmentValidation(true);
+#endif
         auto directory = std::filesystem::u8path(
             std::string(host.data_directory.data, host.data_directory.length));
         std::filesystem::create_directories(directory);

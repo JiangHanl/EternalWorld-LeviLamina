@@ -20,6 +20,7 @@
     "ModuleArtifactTests": "REAL_DLL",
     "ValidationModuleTests": "REAL_DLL",
     "ConsumerModuleTests": "REAL_DLL",
+    "CommerceModuleTests": "REAL_DLL",
     "ProductionIsolationTests": "REAL_DLL",
     "ProductionArtifactScan": "REAL_DLL"
   }

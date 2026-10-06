@@ -27,13 +27,14 @@ try {
         Invoke-ReleaseTest $name
     }
     Invoke-ReleaseTest 'ModuleArtifactTests' @('bin/Eternal')
-    foreach ($fixture in @('CoreValidationModule','EternalCoreValidation','EternalTestConsumer')) {
+    foreach ($fixture in @('CoreValidationModule','EternalCoreValidation','EternalTestConsumer','EternalCommerceValidation')) {
         & $Xmake 'build' $fixture
         if ($LASTEXITCODE -ne 0) { throw "Independent validation DLL build failed: $fixture" }
     }
     Invoke-ReleaseTest 'ValidationModuleTests' @('bin/Eternal','bin/validation/CoreValidationModule.dll')
     Invoke-ReleaseTest 'ConsumerModuleTests' @('bin/Eternal','bin/validation/EternalCoreValidation.dll','bin/validation/EternalTestConsumer.dll')
     Invoke-ReleaseTest 'ProductionIsolationTests' @('bin/Eternal/modules/EternalCore.dll','bin/validation/EternalCoreValidation.dll')
+    Invoke-ReleaseTest 'CommerceModuleTests' @('bin/Eternal','bin/validation/EternalCoreValidation.dll','bin/validation/EternalCommerceValidation.dll')
     & (Join-Path $PSScriptRoot 'Test-ProductionArtifacts.ps1') -Report 'artifacts/ci/production-isolation.json'
     Add-TestResult 'ProductionArtifactScan'
     & (Join-Path $PSScriptRoot 'Test-PublicTree.ps1')

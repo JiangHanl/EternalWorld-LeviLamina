@@ -108,6 +108,12 @@ $consumerDll = Join-Path $fixtureOutput 'EternalTestConsumer.dll'
 & $nativeLinker @nativeLinkerArguments '/DLL' '/DEBUG' ('/OUT:'+$consumerDll) ('/PDB:'+$fixtureOutput+'/EternalTestConsumer.pdb') @consumerObjects @runtimeLibraries
 if ($LASTEXITCODE -ne 0) { throw 'Independent SDK consumer DLL link failed' }
 $validationProducts += [pscustomobject]@{target='EternalTestConsumer';project_path='bin/validation/EternalTestConsumer.dll';sha256=(Get-SourceHash $consumerDll)}
+$commerceValidationFlags = $commonFlags + @('/DETERNAL_MODULE_BUILD','/DETERNAL_COMMERCE_VALIDATION_BUILD',"/I$projectRoot/modules/EternalCommerce/domain","/I$sqlite")
+$commerceValidationObjects = @((Compile-Cpp 'modules/EternalCommerce/Module.cpp' $commerceValidationFlags 'validation_')) + $commerceDomainObjects
+$commerceValidationDll = Join-Path $fixtureOutput 'EternalCommerceValidation.dll'
+& $nativeLinker @nativeLinkerArguments '/DLL' '/DEBUG' ('/OUT:'+$commerceValidationDll) ('/PDB:'+$fixtureOutput+'/EternalCommerceValidation.pdb') @commerceValidationObjects @runtimeLibraries
+if ($LASTEXITCODE -ne 0) { throw 'Validation Commerce DLL link failed' }
+$validationProducts += [pscustomobject]@{target='EternalCommerceValidation';project_path='bin/validation/EternalCommerceValidation.dll';sha256=(Get-SourceHash $commerceValidationDll)}
 foreach ($validationProduct in $validationProducts) {
     & $nativeReadobj '--coff-exports' '--coff-imports' (Join-Path $projectRoot $validationProduct.project_path) | Set-Content -LiteralPath (Join-Path $build ($validationProduct.target+'-inspection.txt')) -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw "Validation DLL inspection failed: $($validationProduct.target)" }
