@@ -172,6 +172,59 @@ EcStatus EM_CALL onTransfer(void *, const EcPhase2Invocation *invocation,
         return EC_INTERNAL_ERROR;
     }
 }
+
+EcStatus EM_CALL onGift(void *, const EcPhase2Invocation *invocation,
+                        EcUtf8Buffer *reply) noexcept {
+    try {
+        if (!invocation || !reply || !reply->data || !reply->capacity)
+            return EC_INVALID_ARGUMENT;
+        if (!commerce)
+            return replyText(reply, "Commerce not ready", EC_NOT_READY);
+        const std::string_view args(invocation->arguments.data, invocation->arguments.length);
+        const auto space = args.find(' ');
+        if (space == std::string_view::npos)
+            return replyText(reply, "usage: gift <shareMinor> <recipients>", EC_INVALID_ARGUMENT);
+        std::int64_t shareMinor = 0, recipients = 0;
+        const auto first = std::from_chars(args.data(), args.data() + space, shareMinor);
+        const auto rest = args.substr(space + 1);
+        const auto second =
+            std::from_chars(rest.data(), rest.data() + rest.size(), recipients);
+        if (first.ec != std::errc{} || first.ptr != args.data() + space || second.ec != std::errc{} ||
+            second.ptr != rest.data() + rest.size())
+            return replyText(reply, "invalid gift parameters", EC_INVALID_ARGUMENT);
+        const auto senderUuid = hex128(invocation->subject);
+        const auto gift = commerce->createGift(senderUuid, shareMinor, recipients, wall());
+        if (gift.status != eternal::commerce::Status::Ok)
+            return replyText(reply, "Gift creation rejected", EC_DENIED);
+        const auto deduct = gift.gift->totalMinor + gift.gift->feeMinor;
+        EcPhase2InvocationAuthorization auth{};
+        auth.invocation = invocation->invocation;
+        auth.target = invocation->subject;
+        auth.operation = EC_P2_OP_ASSET_DEDUCT;
+        auth.asset = EC_P2_ASSET_MONEY;
+        auth.minor_units = deduct;
+        EcPhase2InvocationGrant grant{};
+        auto status = client.authorize(auth, grant);
+        if (status != EC_OK)
+            return replyText(reply, "Gift authorize denied", status);
+        EcPhase2MutationRequest mutation{};
+        mutation.meta.capability = grant.capability;
+        mutation.meta.request_id = invocation->request_id;
+        mutation.meta.idempotency_key = invocation->request_id;
+        mutation.target = invocation->subject;
+        mutation.operation = EC_P2_OP_ASSET_DEDUCT;
+        mutation.asset = EC_P2_ASSET_MONEY;
+        mutation.minor_units = deduct;
+        mutation.reason = ecView("Commerce gift");
+        EcPhase2Submission submission{};
+        status = client.submit(mutation, submission);
+        if (status != EC_OK)
+            return replyText(reply, "Gift submit denied", status);
+        return replyText(reply, "Commerce gift accepted", EC_OK);
+    } catch (...) {
+        return EC_INTERNAL_ERROR;
+    }
+}
 } // namespace
 
 extern "C" EM_EXPORT const EmModuleDescriptor *EM_CALL EternalModule_GetDescriptor() noexcept {
@@ -219,6 +272,17 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Enable() noexcept {
             client.reset();
             return registered;
         }
+        EcPhase2CommandRouteRequest giftRoute{};
+        giftRoute.route_id = ecView("gift");
+        giftRoute.operation_mask = UINT64_C(1) << (EC_P2_OP_ASSET_DEDUCT - 1);
+        giftRoute.callback = onGift;
+        giftRoute.user = nullptr;
+        const auto giftRegistered = client.registerRoute(giftRoute);
+        if (giftRegistered != EC_OK) {
+            commerce.reset();
+            client.reset();
+            return giftRegistered;
+        }
 #ifdef ETERNAL_COMMERCE_VALIDATION_BUILD
         EcPhase2ConsumerRegistrationRequest registration{};
         registration.local_key = ecView("delivery");
@@ -255,6 +319,9 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Disable() noexcept {
         EcPhase2RouteRemovalRequest removal{};
         removal.route_id = ecView("transfer");
         client.unregisterRoute(removal);
+        EcPhase2RouteRemovalRequest giftRemoval{};
+        giftRemoval.route_id = ecView("gift");
+        client.unregisterRoute(giftRemoval);
     }
     deliveryConsumer = {};
     enabled = false;

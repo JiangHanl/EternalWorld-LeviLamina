@@ -179,6 +179,10 @@ int main(int argc, char **argv) {
         run.notice();
         require(deliveryCount(scratch.path) >= 1, "Delivery consumer did not record the event");
         pass("REAL_DLL Commerce delivery consumer registers, dedups and ACKs");
+        const auto giftReply = run.command(run.owner, "invoke commerce gift 1000 3");
+        require(giftReply.find("Commerce gift accepted") != std::string::npos,
+                "Gift route did not accept");
+        pass("REAL_DLL Commerce gift authorize and Core deduct closed loop");
         std::cout << "PASS CommerceModuleTests: " << groups
                   << " groups (REAL_DLL; synthetic identities; REAL_CLIENT NOT RUN)\n";
         return 0;
