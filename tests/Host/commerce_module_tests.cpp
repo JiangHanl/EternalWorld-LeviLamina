@@ -183,6 +183,13 @@ int main(int argc, char **argv) {
         require(giftReply.find("Commerce gift accepted") != std::string::npos,
                 "Gift route did not accept");
         pass("REAL_DLL Commerce gift authorize and Core deduct closed loop");
+        run.command(run.owner, "asset SyntheticRecipient money 10000 buy-fund buy-fund-reason");
+        const auto listReply = run.command(run.owner, "invoke commerce list diamond 5000");
+        const auto buyReply =
+            run.command(run.recipient, "invoke commerce buy " + listReply);
+        require(buyReply.find("Commerce buy accepted") != std::string::npos,
+                "Buy route did not accept");
+        pass("REAL_DLL Commerce consignment buy transfer and delivery closed loop");
         std::cout << "PASS CommerceModuleTests: " << groups
                   << " groups (REAL_DLL; synthetic identities; REAL_CLIENT NOT RUN)\n";
         return 0;

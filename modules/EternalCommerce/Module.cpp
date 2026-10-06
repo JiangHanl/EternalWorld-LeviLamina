@@ -68,11 +68,12 @@ std::int64_t wall() {
                std::chrono::system_clock::now().time_since_epoch())
         .count();
 }
-EcStatus replyText(EcUtf8Buffer *reply, const char *message, EcStatus status) {
-    const auto length = static_cast<uint32_t>(std::strlen(message) + 1);
+EcStatus replyText(EcUtf8Buffer *reply, std::string_view message, EcStatus status) {
+    const auto length = static_cast<uint32_t>(message.size() + 1);
     if (!reply->data || reply->capacity < length)
         return EC_BUFFER_TOO_SMALL;
-    std::memcpy(reply->data, message, length);
+    std::memcpy(reply->data, message.data(), message.size());
+    reply->data[message.size()] = 0;
     reply->required = length;
     return status;
 }
@@ -225,6 +226,89 @@ EcStatus EM_CALL onGift(void *, const EcPhase2Invocation *invocation,
         return EC_INTERNAL_ERROR;
     }
 }
+
+EcStatus EM_CALL onList(void *, const EcPhase2Invocation *invocation,
+                        EcUtf8Buffer *reply) noexcept {
+    try {
+        if (!invocation || !reply || !reply->data || !reply->capacity)
+            return EC_INVALID_ARGUMENT;
+        if (!commerce)
+            return replyText(reply, "Commerce not ready", EC_NOT_READY);
+        const std::string_view args(invocation->arguments.data, invocation->arguments.length);
+        const auto space = args.find(' ');
+        if (space == std::string_view::npos)
+            return replyText(reply, "usage: list <item> <priceMinor>", EC_INVALID_ARGUMENT);
+        const auto item = args.substr(0, space);
+        std::int64_t price = 0;
+        const auto rest = args.substr(space + 1);
+        const auto parsed = std::from_chars(rest.data(), rest.data() + rest.size(), price);
+        if (item.empty() || parsed.ec != std::errc{} || parsed.ptr != rest.data() + rest.size() ||
+            price <= 0)
+            return replyText(reply, "invalid list parameters", EC_INVALID_ARGUMENT);
+        const auto result =
+            commerce->listConsignment(hex128(invocation->subject), item, "{tag:1}", item, price,
+                                     wall());
+        if (result.status != eternal::commerce::Status::Ok)
+            return replyText(reply, "List creation rejected", EC_DENIED);
+        return replyText(reply, std::to_string(result.consignment->id), EC_OK);
+    } catch (...) {
+        return EC_INTERNAL_ERROR;
+    }
+}
+
+EcStatus EM_CALL onBuy(void *, const EcPhase2Invocation *invocation,
+                       EcUtf8Buffer *reply) noexcept {
+    try {
+        if (!invocation || !reply || !reply->data || !reply->capacity)
+            return EC_INVALID_ARGUMENT;
+        if (!commerce)
+            return replyText(reply, "Commerce not ready", EC_NOT_READY);
+        const std::string_view args(invocation->arguments.data, invocation->arguments.length);
+        std::int64_t id = 0;
+        const auto parsed = std::from_chars(args.data(), args.data() + args.size(), id);
+        if (parsed.ec != std::errc{} || parsed.ptr != args.data() + args.size() || id <= 0)
+            return replyText(reply, "usage: buy <consignmentId>", EC_INVALID_ARGUMENT);
+        const auto buyerUuid = hex128(invocation->subject);
+        if (commerce->buyConsignment(id, buyerUuid, wall()) != eternal::commerce::Status::Ok)
+            return replyText(reply, "Buy rejected", EC_DENIED);
+        const auto consignment = commerce->consignment(id).consignment;
+        if (!consignment)
+            return replyText(reply, "Consignment missing", EC_NOT_FOUND);
+        const auto seller = parse128(consignment->sellerUuid);
+        EcPhase2InvocationAuthorization auth{};
+        auth.invocation = invocation->invocation;
+        auth.target = invocation->subject;
+        auth.recipient = seller;
+        auth.operation = EC_P2_OP_TRANSFER;
+        auth.asset = EC_P2_ASSET_MONEY;
+        auth.minor_units = consignment->priceMinor;
+        EcPhase2InvocationGrant grant{};
+        auto status = client.authorize(auth, grant);
+        if (status != EC_OK)
+            return replyText(reply, "Buy authorize denied", status);
+        EcPhase2MutationRequest mutation{};
+        mutation.meta.capability = grant.capability;
+        mutation.meta.request_id = invocation->request_id;
+        mutation.meta.idempotency_key = invocation->request_id;
+        mutation.target = invocation->subject;
+        mutation.recipient = seller;
+        mutation.operation = EC_P2_OP_TRANSFER;
+        mutation.asset = EC_P2_ASSET_MONEY;
+        mutation.minor_units = consignment->priceMinor;
+        mutation.reason = ecView("Commerce buy");
+        EcPhase2Submission submission{};
+        status = client.submit(mutation, submission);
+        if (status != EC_OK)
+            return replyText(reply, "Buy submit denied", status);
+        const auto delivery = commerce->createDelivery(buyerUuid, consignment->item,
+                                                       consignment->nbt, "consignment", wall());
+        if (delivery.status != eternal::commerce::Status::Ok)
+            return replyText(reply, "Delivery creation failed", EC_INTERNAL_ERROR);
+        return replyText(reply, "Commerce buy accepted", EC_OK);
+    } catch (...) {
+        return EC_INTERNAL_ERROR;
+    }
+}
 } // namespace
 
 extern "C" EM_EXPORT const EmModuleDescriptor *EM_CALL EternalModule_GetDescriptor() noexcept {
@@ -283,6 +367,28 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Enable() noexcept {
             client.reset();
             return giftRegistered;
         }
+        EcPhase2CommandRouteRequest listRoute{};
+        listRoute.route_id = ecView("list");
+        listRoute.operation_mask = UINT64_C(1) << (EC_P2_OP_ASSET_READ - 1);
+        listRoute.callback = onList;
+        listRoute.user = nullptr;
+        const auto listRegistered = client.registerRoute(listRoute);
+        if (listRegistered != EC_OK) {
+            commerce.reset();
+            client.reset();
+            return listRegistered;
+        }
+        EcPhase2CommandRouteRequest buyRoute{};
+        buyRoute.route_id = ecView("buy");
+        buyRoute.operation_mask = UINT64_C(1) << (EC_P2_OP_TRANSFER - 1);
+        buyRoute.callback = onBuy;
+        buyRoute.user = nullptr;
+        const auto buyRegistered = client.registerRoute(buyRoute);
+        if (buyRegistered != EC_OK) {
+            commerce.reset();
+            client.reset();
+            return buyRegistered;
+        }
 #ifdef ETERNAL_COMMERCE_VALIDATION_BUILD
         EcPhase2ConsumerRegistrationRequest registration{};
         registration.local_key = ecView("delivery");
@@ -322,6 +428,12 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Disable() noexcept {
         EcPhase2RouteRemovalRequest giftRemoval{};
         giftRemoval.route_id = ecView("gift");
         client.unregisterRoute(giftRemoval);
+        EcPhase2RouteRemovalRequest listRemoval{};
+        listRemoval.route_id = ecView("list");
+        client.unregisterRoute(listRemoval);
+        EcPhase2RouteRemovalRequest buyRemoval{};
+        buyRemoval.route_id = ecView("buy");
+        client.unregisterRoute(buyRemoval);
     }
     deliveryConsumer = {};
     enabled = false;
