@@ -1,8 +1,10 @@
 #include "Commerce.hpp"
 #include "Schema.hpp"
 #include "Sha256.hpp"
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <limits>
 #include <mutex>
 #include <sqlite3.h>
 #include <stdexcept>
@@ -89,7 +91,35 @@ void verifyDatabase(sqlite3 *db) {
     if (foreign.row())
         throw SqlError(SQLITE_CONSTRAINT, "Commerce database foreign_key_check failed");
 }
+std::int64_t dayOf(std::int64_t nowMs) {
+    constexpr std::int64_t dayMs = 24ll * 3600 * 1000;
+    constexpr std::int64_t utc8OffsetMs = 8ll * 3600 * 1000;
+    return (nowMs + utc8OffsetMs) / dayMs;
+}
 } // namespace
+
+std::int64_t computeTieredTax(std::int64_t taxableMinor, std::span<const TaxTier> tiers) {
+    if (taxableMinor <= 0)
+        return 0;
+    std::int64_t remaining = taxableMinor;
+    std::int64_t lower = 0;
+    std::int64_t tax = 0;
+    for (const auto &tier : tiers) {
+        if (remaining <= 0)
+            break;
+        const auto upper =
+            tier.upToMinor > 0 ? tier.upToMinor : std::numeric_limits<std::int64_t>::max();
+        if (lower >= upper) {
+            lower = upper;
+            continue;
+        }
+        const auto bracket = std::min(remaining, upper - lower);
+        tax += bracket * tier.ratePermille / 1000;
+        remaining -= bracket;
+        lower = upper;
+    }
+    return tax;
+}
 
 struct Commerce::Impl {
     sqlite3 *db{};
@@ -131,6 +161,11 @@ struct Commerce::Impl {
                 Statement q(db, "SELECT checksum FROM schema_migration WHERE version=1");
                 if (!q.row() || q.string(0) != detail::sha256(detail::schemaV1))
                     throw std::runtime_error("Commerce schema migration checksum mismatch");
+                if (version >= 2) {
+                    Statement v2(db, "SELECT checksum FROM schema_migration WHERE version=2");
+                    if (!v2.row() || v2.string(0) != detail::sha256(detail::schemaV2))
+                        throw std::runtime_error("Commerce schema migration checksum mismatch");
+                }
                 verifyDatabase(db);
             }
             {
@@ -140,8 +175,6 @@ struct Commerce::Impl {
             }
             execute(db, "PRAGMA synchronous=FULL");
             if (version < detail::schemaVersion) {
-                if (existed)
-                    execute(db, "SELECT 1"); // Existing DB must already be at version 1.
                 execute(db, "PRAGMA foreign_keys=OFF");
                 Transaction tx(db);
                 if (version == 0) {
@@ -153,6 +186,13 @@ struct Commerce::Impl {
                     migration.number(2, now());
                     migration.done();
                 }
+                execute(db, std::string(detail::schemaV2).c_str());
+                Statement migration2(
+                    db, "INSERT INTO schema_migration(version,checksum,appliedAt) "
+                        "VALUES(2,?,?)");
+                migration2.text(1, detail::sha256(detail::schemaV2));
+                migration2.number(2, now());
+                migration2.done();
                 tx.commit();
                 execute(db, "PRAGMA foreign_keys=ON");
                 verifyDatabase(db);
@@ -297,6 +337,96 @@ Status Commerce::expireGift(std::int64_t id, std::int64_t nowMs) {
         return Status::Ok;
     } catch (const SqlError &e) {
         return sqlStatus(e);
+    }
+}
+
+TransferResult Commerce::recordTransfer(std::string_view senderUuid, std::int64_t amountMinor,
+                                        std::string_view idempotencyKey, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(senderUuid, 64) || amountMinor <= 0 || !textValid(idempotencyKey, 160) ||
+            nowMs < 0)
+            return {Status::Invalid, 0, 0, 0, 0, 0, false, "Invalid transfer parameters"};
+        const auto day = dayOf(nowMs);
+        Transaction tx(impl_->db);
+        Statement existing(impl_->db,
+                           "SELECT id,taxFreeMinor,taxableMinor,taxMinor,netMinor FROM transfers "
+                           "WHERE senderUuid=? AND idempotencyKey=?");
+        existing.text(1, senderUuid);
+        existing.text(2, idempotencyKey);
+        if (existing.row()) {
+            TransferResult replayed{Status::Ok, existing.integer(0), existing.integer(1),
+                                    existing.integer(2), existing.integer(3), existing.integer(4),
+                                    true, ""};
+            tx.commit();
+            return replayed;
+        }
+        std::int64_t used = 0;
+        Statement allowance(impl_->db,
+                            "SELECT exemptUsedMinor FROM transfer_allowance WHERE playerUuid=? "
+                            "AND day=?");
+        allowance.text(1, senderUuid);
+        allowance.number(2, day);
+        if (allowance.row())
+            used = allowance.integer(0);
+        const auto remaining = std::max<std::int64_t>(0, transferDailyExemptMinor - used);
+        const auto taxFree = std::min(amountMinor, remaining);
+        const auto taxable = amountMinor - taxFree;
+        const auto tax = computeTieredTax(taxable, transferDefaultTiers);
+        const auto net = amountMinor - tax;
+        Statement upsert(impl_->db,
+                         "INSERT INTO transfer_allowance(playerUuid,day,exemptUsedMinor) "
+                         "VALUES(?,?,?) ON CONFLICT(playerUuid,day) DO UPDATE SET "
+                         "exemptUsedMinor=exemptUsedMinor+excluded.exemptUsedMinor");
+        upsert.text(1, senderUuid);
+        upsert.number(2, day);
+        upsert.number(3, taxFree);
+        upsert.done();
+        Statement insert(impl_->db,
+                         "INSERT INTO transfers(senderUuid,amountMinor,taxFreeMinor,taxableMinor,"
+                         "taxMinor,netMinor,idempotencyKey,day,createdAtMs) "
+                         "VALUES(?,?,?,?,?,?,?,?,?)");
+        insert.text(1, senderUuid);
+        insert.number(2, amountMinor);
+        insert.number(3, taxFree);
+        insert.number(4, taxable);
+        insert.number(5, tax);
+        insert.number(6, net);
+        insert.text(7, idempotencyKey);
+        insert.number(8, day);
+        insert.number(9, nowMs);
+        insert.done();
+        const auto id = sqlite3_last_insert_rowid(impl_->db);
+        tx.commit();
+        return {Status::Ok, id, taxFree, taxable, tax, net, false, ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), 0, 0, 0, 0, 0, false, e.what()};
+    }
+}
+
+TransferResult Commerce::previewTransfer(std::string_view senderUuid, std::int64_t amountMinor,
+                                         std::int64_t nowMs) const {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(senderUuid, 64) || amountMinor <= 0 || nowMs < 0)
+            return {Status::Invalid, 0, 0, 0, 0, 0, false, "Invalid transfer parameters"};
+        const auto day = dayOf(nowMs);
+        std::int64_t used = 0;
+        Statement allowance(impl_->db,
+                            "SELECT exemptUsedMinor FROM transfer_allowance WHERE playerUuid=? "
+                            "AND day=?");
+        allowance.text(1, senderUuid);
+        allowance.number(2, day);
+        if (allowance.row())
+            used = allowance.integer(0);
+        const auto remaining = std::max<std::int64_t>(0, transferDailyExemptMinor - used);
+        const auto taxFree = std::min(amountMinor, remaining);
+        const auto taxable = amountMinor - taxFree;
+        const auto tax = computeTieredTax(taxable, transferDefaultTiers);
+        const auto net = amountMinor - tax;
+        return {Status::Ok, 0, taxFree, taxable, tax, net, false, ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), 0, 0, 0, 0, 0, false, e.what()};
     }
 }
 
