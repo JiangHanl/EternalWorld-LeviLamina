@@ -20,6 +20,7 @@ inline constexpr std::int64_t giftFeePermille = 20;
 inline constexpr std::int64_t giftLifetimeMs = 300000;
 inline constexpr std::int64_t transferDailyExemptMinor = 1000 * minorUnitsPerLiang;
 inline constexpr std::int64_t transferMinSplitMinor = 5 * minorUnitsPerLiang;
+inline constexpr std::int64_t consignmentLifetimeMs = 7ll * 24 * 3600 * 1000;
 
 enum class Status {
     Ok,
@@ -75,6 +76,26 @@ struct TransferResult {
     std::string error;
 };
 
+struct Consignment {
+    std::int64_t id{};
+    std::string sellerUuid;
+    std::string item;
+    std::string nbt;
+    std::string displayName;
+    std::int64_t priceMinor{};
+    std::int64_t listedAtMs{};
+    std::int64_t expiresAtMs{};
+    std::string status;
+    std::string buyerUuid;
+    std::int64_t soldAtMs{};
+};
+
+struct ConsignmentResult {
+    Status status{Status::Invalid};
+    std::optional<Consignment> consignment;
+    std::string error;
+};
+
 std::int64_t computeTieredTax(std::int64_t taxableMinor, std::span<const TaxTier> tiers);
 
 class Commerce {
@@ -93,6 +114,13 @@ class Commerce {
                                   std::string_view idempotencyKey, std::int64_t nowMs);
     TransferResult previewTransfer(std::string_view senderUuid, std::int64_t amountMinor,
                                    std::int64_t nowMs) const;
+    ConsignmentResult listConsignment(std::string_view sellerUuid, std::string_view item,
+                                      std::string_view nbt, std::string_view displayName,
+                                      std::int64_t priceMinor, std::int64_t nowMs);
+    ConsignmentResult consignment(std::int64_t id) const;
+    Status buyConsignment(std::int64_t id, std::string_view buyerUuid, std::int64_t nowMs);
+    Status cancelConsignment(std::int64_t id, std::string_view sellerUuid, std::int64_t nowMs);
+    Status returnExpiredConsignment(std::int64_t id, std::int64_t nowMs);
 
   private:
     struct Impl;

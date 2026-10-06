@@ -166,6 +166,11 @@ struct Commerce::Impl {
                     if (!v2.row() || v2.string(0) != detail::sha256(detail::schemaV2))
                         throw std::runtime_error("Commerce schema migration checksum mismatch");
                 }
+                if (version >= 3) {
+                    Statement v3(db, "SELECT checksum FROM schema_migration WHERE version=3");
+                    if (!v3.row() || v3.string(0) != detail::sha256(detail::schemaV3))
+                        throw std::runtime_error("Commerce schema migration checksum mismatch");
+                }
                 verifyDatabase(db);
             }
             {
@@ -193,6 +198,13 @@ struct Commerce::Impl {
                 migration2.text(1, detail::sha256(detail::schemaV2));
                 migration2.number(2, now());
                 migration2.done();
+                execute(db, std::string(detail::schemaV3).c_str());
+                Statement migration3(
+                    db, "INSERT INTO schema_migration(version,checksum,appliedAt) "
+                        "VALUES(3,?,?)");
+                migration3.text(1, detail::sha256(detail::schemaV3));
+                migration3.number(2, now());
+                migration3.done();
                 tx.commit();
                 execute(db, "PRAGMA foreign_keys=ON");
                 verifyDatabase(db);
@@ -427,6 +439,148 @@ TransferResult Commerce::previewTransfer(std::string_view senderUuid, std::int64
         return {Status::Ok, 0, taxFree, taxable, tax, net, false, ""};
     } catch (const SqlError &e) {
         return {sqlStatus(e), 0, 0, 0, 0, 0, false, e.what()};
+    }
+}
+
+ConsignmentResult Commerce::listConsignment(std::string_view sellerUuid, std::string_view item,
+                                            std::string_view nbt, std::string_view displayName,
+                                            std::int64_t priceMinor, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(sellerUuid, 64) || !textValid(item, 256) || !textValid(nbt, 1048576) ||
+            !textValid(displayName, 256) || priceMinor <= 0 || nowMs < 0)
+            return {Status::Invalid, std::nullopt, "Invalid consignment parameters"};
+        const auto expiresAtMs = nowMs + consignmentLifetimeMs;
+        Transaction tx(impl_->db);
+        Statement insert(impl_->db,
+                         "INSERT INTO consignments(sellerUuid,item,nbt,displayName,priceMinor,"
+                         "listedAtMs,expiresAtMs,status) VALUES(?,?,?,?,?,?,?,'listed')");
+        insert.text(1, sellerUuid);
+        insert.text(2, item);
+        insert.text(3, nbt);
+        insert.text(4, displayName);
+        insert.number(5, priceMinor);
+        insert.number(6, nowMs);
+        insert.number(7, expiresAtMs);
+        insert.done();
+        const auto id = sqlite3_last_insert_rowid(impl_->db);
+        tx.commit();
+        return {Status::Ok,
+                Consignment{id, std::string(sellerUuid), std::string(item), std::string(nbt),
+                            std::string(displayName), priceMinor, nowMs, expiresAtMs, "listed",
+                            "", 0},
+                ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), std::nullopt, e.what()};
+    }
+}
+
+ConsignmentResult Commerce::consignment(std::int64_t id) const {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0)
+            return {Status::Invalid, std::nullopt, "Invalid consignment id"};
+        Statement q(impl_->db,
+                    "SELECT id,sellerUuid,item,nbt,displayName,priceMinor,listedAtMs,expiresAtMs,"
+                    "status,coalesce(buyerUuid,''),coalesce(soldAtMs,0) FROM consignments "
+                    "WHERE id=?");
+        q.number(1, id);
+        if (!q.row())
+            return {Status::NotFound, std::nullopt, "Consignment not found"};
+        return {Status::Ok,
+                Consignment{q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
+                            q.integer(5), q.integer(6), q.integer(7), q.string(8), q.string(9),
+                            q.integer(10)},
+                ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), std::nullopt, e.what()};
+    }
+}
+
+Status Commerce::buyConsignment(std::int64_t id, std::string_view buyerUuid, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || !textValid(buyerUuid, 64) || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement q(impl_->db,
+                    "SELECT sellerUuid,status,expiresAtMs FROM consignments WHERE id=?");
+        q.number(1, id);
+        if (!q.row())
+            return Status::NotFound;
+        if (q.string(1) != "listed")
+            return Status::Conflict;
+        if (nowMs >= q.integer(2))
+            return Status::Expired;
+        if (q.string(0) == buyerUuid)
+            return Status::Conflict;
+        Statement buy(impl_->db,
+                      "UPDATE consignments SET status='sold',buyerUuid=?,soldAtMs=? WHERE id=? "
+                      "AND status='listed'");
+        buy.text(1, buyerUuid);
+        buy.number(2, nowMs);
+        buy.number(3, id);
+        buy.done();
+        if (sqlite3_changes(impl_->db) != 1)
+            return Status::Conflict;
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+Status Commerce::cancelConsignment(std::int64_t id, std::string_view sellerUuid,
+                                   std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || !textValid(sellerUuid, 64) || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement q(impl_->db,
+                    "SELECT sellerUuid,status,expiresAtMs FROM consignments WHERE id=?");
+        q.number(1, id);
+        if (!q.row())
+            return Status::NotFound;
+        if (q.string(1) != "listed")
+            return Status::Conflict;
+        if (q.string(0) != sellerUuid)
+            return Status::Conflict;
+        Statement update(impl_->db,
+                         "UPDATE consignments SET status='cancelled' WHERE id=? AND "
+                         "status='listed'");
+        update.number(1, id);
+        update.done();
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+Status Commerce::returnExpiredConsignment(std::int64_t id, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement q(impl_->db, "SELECT status,expiresAtMs FROM consignments WHERE id=?");
+        q.number(1, id);
+        if (!q.row())
+            return Status::NotFound;
+        if (q.string(0) != "listed")
+            return Status::Conflict;
+        if (nowMs < q.integer(1))
+            return Status::Ok;
+        Statement update(impl_->db,
+                         "UPDATE consignments SET status='returned' WHERE id=? AND "
+                         "status='listed'");
+        update.number(1, id);
+        update.done();
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
     }
 }
 

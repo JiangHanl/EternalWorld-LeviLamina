@@ -1,12 +1,14 @@
 #include "Commerce.hpp"
 #include "Schema.hpp"
 #include "Sha256.hpp"
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>
+#include <thread>
 
 using namespace eternal::commerce;
 namespace fs = std::filesystem;
@@ -65,6 +67,9 @@ int main() {
         const auto sql2 = fs::path(__FILE__).parent_path().parent_path().parent_path() /
                           "migrations/EternalCommerce/002_transfer_tax.sql";
         require(read(sql2) == detail::schemaV2, "SQL and compiled schema v2 differ");
+        const auto sql3 = fs::path(__FILE__).parent_path().parent_path().parent_path() /
+                          "migrations/EternalCommerce/003_consignment.sql";
+        require(read(sql3) == detail::schemaV3, "SQL and compiled schema v3 differ");
     });
 
     test("gift validation and 2% fee", [&] {
@@ -193,6 +198,99 @@ int main() {
         require(p.taxFreeMinor == 500 * minorUnitsPerLiang, "Wrong preview");
         auto r = commerce.recordTransfer("alice", 500 * minorUnitsPerLiang, "k1", 1000000);
         require(r.taxFreeMinor == 500 * minorUnitsPerLiang, "Preview consumed allowance");
+    });
+
+    test("consignment lists and preserves item NBT and Chinese display", [&] {
+        Commerce commerce((root / "consignment-list.sqlite").string());
+        auto r = commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石",
+                                          500 * minorUnitsPerLiang, 1000000);
+        equal(r.status, Status::Ok);
+        require(r.consignment.has_value(), "Missing consignment");
+        require(r.consignment->item == "minecraft:diamond" && r.consignment->nbt == "{tag:1}" &&
+                    r.consignment->displayName == "钻石",
+                "Metadata lost");
+        require(r.consignment->status == "listed", "Wrong status");
+        require(r.consignment->expiresAtMs == 1000000 + consignmentLifetimeMs, "Wrong expiry");
+        equal(commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石", 0,
+                                       1000000)
+                  .status,
+              Status::Invalid);
+        equal(commerce.listConsignment("seller", "", "{tag:1}", "钻石", 100, 1000000).status,
+              Status::Invalid);
+    });
+
+    test("consignment buy is race-safe", [&] {
+        Commerce commerce((root / "consignment-buy.sqlite").string());
+        auto r = commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石",
+                                          500 * minorUnitsPerLiang, 1000000);
+        equal(r.status, Status::Ok);
+        const auto id = r.consignment->id;
+        equal(commerce.buyConsignment(id, "buyer1", 1000000), Status::Ok);
+        equal(commerce.buyConsignment(id, "buyer2", 1000000), Status::Conflict);
+        auto c = commerce.consignment(id).consignment;
+        require(c->status == "sold" && c->buyerUuid == "buyer1", "Wrong buyer");
+        auto r2 = commerce.listConsignment("seller", "minecraft:iron", "{tag:2}", "铁锭", 100,
+                                           1000000);
+        equal(commerce.buyConsignment(r2.consignment->id, "seller", 1000000), Status::Conflict);
+    });
+
+    test("concurrent buy settles exactly one buyer", [&] {
+        Commerce commerce((root / "consignment-concurrent.sqlite").string());
+        auto r = commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石",
+                                          500 * minorUnitsPerLiang, 1000000);
+        const auto id = r.consignment->id;
+        std::atomic<int> ok{0}, conflict{0};
+        auto attempt = [&](std::string_view buyer) {
+            const auto s = commerce.buyConsignment(id, buyer, 1000000);
+            if (s == Status::Ok)
+                ++ok;
+            else if (s == Status::Conflict)
+                ++conflict;
+        };
+        std::thread t1(attempt, "buyer1");
+        std::thread t2(attempt, "buyer2");
+        t1.join();
+        t2.join();
+        require(ok.load() == 1 && conflict.load() == 1, "Concurrent buy not serialized");
+        require(commerce.consignment(id).consignment->status == "sold", "Not sold");
+    });
+
+    test("consignment buy after expiry is refused", [&] {
+        Commerce commerce((root / "consignment-expire.sqlite").string());
+        auto r = commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石",
+                                          500 * minorUnitsPerLiang, 1000000);
+        equal(commerce.buyConsignment(r.consignment->id, "buyer",
+                                      1000000 + consignmentLifetimeMs),
+              Status::Expired);
+    });
+
+    test("unsold consignment returns after seven days", [&] {
+        Commerce commerce((root / "consignment-return.sqlite").string());
+        auto r = commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石",
+                                          500 * minorUnitsPerLiang, 1000000);
+        const auto id = r.consignment->id;
+        equal(commerce.returnExpiredConsignment(id, 1000000 + consignmentLifetimeMs - 1),
+              Status::Ok);
+        require(commerce.consignment(id).consignment->status == "listed", "Returned early");
+        equal(commerce.returnExpiredConsignment(id, 1000000 + consignmentLifetimeMs), Status::Ok);
+        require(commerce.consignment(id).consignment->status == "returned", "Not returned");
+        equal(commerce.returnExpiredConsignment(id, 1000000 + consignmentLifetimeMs + 1),
+              Status::Conflict);
+    });
+
+    test("consignment cancel only by seller and preserves restart", [&] {
+        Commerce commerce((root / "consignment-cancel.sqlite").string());
+        auto r = commerce.listConsignment("seller", "minecraft:diamond", "{tag:1}", "钻石",
+                                          500 * minorUnitsPerLiang, 1000000);
+        const auto id = r.consignment->id;
+        equal(commerce.cancelConsignment(id, "other", 1000000), Status::Conflict);
+        equal(commerce.cancelConsignment(id, "seller", 1000000), Status::Ok);
+        require(commerce.consignment(id).consignment->status == "cancelled", "Not cancelled");
+        Commerce reopened((root / "consignment-cancel.sqlite").string());
+        auto c = reopened.consignment(id).consignment;
+        require(c->item == "minecraft:diamond" && c->nbt == "{tag:1}" &&
+                    c->displayName == "钻石",
+                "Metadata lost on restart");
     });
 
     std::cout << "Commerce Domain: " << groups
