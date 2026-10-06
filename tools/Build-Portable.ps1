@@ -61,6 +61,7 @@ foreach ($name in $moduleNames) {
     $flags = $commonFlags + @('/DETERNAL_MODULE_BUILD')
     $objects = @()
     if ($name -eq 'EternalCore') { $flags += @('/DETERNAL_CORE_BUILD',"/I$projectRoot/modules/EternalCore/api","/I$projectRoot/modules/EternalCore/runtime","/I$projectRoot/modules/EternalCore/domain","/I$sqlite","/I$jsonInclude") }
+    if ($name -eq 'EternalCommerce') { $flags += @("/I$projectRoot/modules/EternalCommerce/domain","/I$sqlite") }
     $objects += Compile-Cpp ('modules/'+$name+'/Module.cpp') $flags
     if ($name -eq 'EternalCore') {
         $objects += Compile-Cpp 'modules/EternalCore/api/ApiService.cpp' $flags
@@ -70,6 +71,7 @@ foreach ($name in $moduleNames) {
         }
         $objects += $domainObjects
     }
+    if ($name -eq 'EternalCommerce') { $objects += $commerceDomainObjects }
     $moduleLibraries = $runtimeLibraries
     if ($name -eq 'EternalCore') { $moduleLibraries += 'bcrypt.lib' }
     $dll = Join-Path $output ('modules/'+$name+'.dll')

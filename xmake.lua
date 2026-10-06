@@ -89,6 +89,10 @@ for _, name in ipairs(modules) do
             add_syslinks("bcrypt")
             add_deps("EternalDomain")
         end
+        if name == "EternalCommerce" then
+            add_includedirs("modules/EternalCommerce/domain", sqlite)
+            add_deps("CommerceDomain")
+        end
     target_end()
 end
 

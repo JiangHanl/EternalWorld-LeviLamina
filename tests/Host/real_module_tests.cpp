@@ -41,7 +41,12 @@ int main(int argc, char** argv) {
                 && descriptor->struct_version == EM_STRUCT_VERSION && descriptor->abi_major == EM_ABI_MAJOR
                 && descriptor->abi_minor == EM_ABI_MINOR
                 && std::string_view(descriptor->id.data, descriptor->id.length) == id;
-            if (descriptor) valid = valid && ((descriptor->flags & EM_MODULE_PLANNED) != 0) == (std::string_view(id) != "core");
+            if (descriptor) {
+                const bool planned = (descriptor->flags & EM_MODULE_PLANNED) != 0;
+                const bool expectedPlanned =
+                    std::string_view(id) != "core" && std::string_view(id) != "commerce";
+                valid = valid && planned == expectedPlanned;
+            }
             // Independent internal modules must not advertise LL NativeMod entry points.
             valid = valid && GetProcAddress(image, "ll_mod_load") == nullptr;
             FreeLibrary(image);
