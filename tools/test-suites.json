@@ -10,6 +10,7 @@
     "PublicTreeAudit": "UNIT",
     "CoreDomainTests": "DOMAIN",
     "Phase2DomainTests": "DOMAIN",
+    "CommerceDomainTests": "DOMAIN",
     "Phase2RuntimeTests": "SYNTHETIC_INTEGRATION",
     "ProductionRuntimeIsolationTests": "SYNTHETIC_INTEGRATION",
     "HostRuntimeTests": "SYNTHETIC_INTEGRATION",

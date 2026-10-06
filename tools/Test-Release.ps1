@@ -23,7 +23,7 @@ try {
         }
     }
     Add-TestResult 'SDKLayoutChecks'
-    foreach ($name in @('CoreDomainTests','Phase2DomainTests','Phase2RuntimeTests','SyntheticMultiUserTests','ProductionRuntimeIsolationTests','CoreApiTests','HostRuntimeTests','Phase2NativeBridgeTests','EternalExampleContracts','ConfigTests','SDKCppTests','Phase2ClientContracts')) {
+    foreach ($name in @('CoreDomainTests','Phase2DomainTests','CommerceDomainTests','Phase2RuntimeTests','SyntheticMultiUserTests','ProductionRuntimeIsolationTests','CoreApiTests','HostRuntimeTests','Phase2NativeBridgeTests','EternalExampleContracts','ConfigTests','SDKCppTests','Phase2ClientContracts')) {
         Invoke-ReleaseTest $name
     }
     Invoke-ReleaseTest 'ModuleArtifactTests' @('bin/Eternal')

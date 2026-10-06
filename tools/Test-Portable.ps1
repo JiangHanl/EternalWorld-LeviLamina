@@ -22,6 +22,7 @@ try {
     $cases = @(
         @{name='CoreDomainTests';sources=@('tests/EternalCore/core_tests.cpp');extra=@('modules_EternalCore_domain_Core.cpp.obj','modules_EternalCore_domain_Sha256.cpp.obj','sqlite3.obj')},
         @{name='Phase2DomainTests';sources=@('tests/EternalCore/phase2_domain_tests.cpp');extra=@('modules_EternalCore_domain_Core.cpp.obj','modules_EternalCore_domain_Sha256.cpp.obj','sqlite3.obj')},
+        @{name='CommerceDomainTests';sources=@('tests/EternalCommerce/commerce_tests.cpp');extra=@('modules_EternalCommerce_domain_Commerce.cpp.obj','modules_EternalCommerce_domain_Sha256.cpp.obj','sqlite3.obj')},
         @{name='Phase2RuntimeTests';sources=@('tests/EternalCore/phase2_runtime_tests.cpp','modules/EternalCore/runtime/Runtime.cpp','modules/EternalCore/api/ApiService.cpp');extra=@('modules_EternalCore_domain_Core.cpp.obj','modules_EternalCore_domain_Sha256.cpp.obj','sqlite3.obj');libraries=@('bcrypt.lib')},
         @{name='SyntheticMultiUserTests';sources=@('tests/EternalCore/synthetic_multi_user_tests.cpp','modules/EternalCore/runtime/Runtime.cpp','modules/EternalCore/api/ApiService.cpp');extra=@('modules_EternalCore_domain_Core.cpp.obj','modules_EternalCore_domain_Sha256.cpp.obj','sqlite3.obj');libraries=@('bcrypt.lib')},
         @{name='ProductionRuntimeIsolationTests';sources=@('tests/EternalCore/production_runtime_tests.cpp','modules/EternalCore/runtime/Runtime.cpp','modules/EternalCore/api/ApiService.cpp');extra=@('modules_EternalCore_domain_Core.cpp.obj','modules_EternalCore_domain_Sha256.cpp.obj','sqlite3.obj');libraries=@('bcrypt.lib')},
@@ -43,6 +44,7 @@ try {
         }
         $objects = @()
         $caseFlags = $flags
+        if ($case.name -eq 'CommerceDomainTests') { $caseFlags = $nativeCompilerArguments + @('/UNDEBUG',"/I$sqlite","/I$projectRoot/modules/EternalCommerce/domain") }
         if ($case.name -in @('Phase2RuntimeTests','SyntheticMultiUserTests')) { $caseFlags += @('/DETERNAL_CORE_RUNTIME_TESTING','/DETERNAL_CORE_VALIDATION_BUILD') }
         foreach ($source in $case.sources) {
             $object = Join-Path $build ('test_'+$case.name+'_'+$source.Replace('/','_')+'.obj')

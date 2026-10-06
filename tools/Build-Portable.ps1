@@ -55,6 +55,8 @@ if ($HostOnly) {
 if ($LASTEXITCODE -ne 0) { throw 'Private SQLite compilation failed' }
 $domainFlags = $commonFlags + @("/I$sqlite","/I$projectRoot/modules/EternalCore/domain")
 $domainObjects = @((Compile-Cpp 'modules/EternalCore/domain/Core.cpp' $domainFlags),(Compile-Cpp 'modules/EternalCore/domain/Sha256.cpp' $domainFlags),$sqliteObject)
+$commerceDomainFlags = $commonFlags + @("/I$sqlite","/I$projectRoot/modules/EternalCommerce/domain")
+$commerceDomainObjects = @((Compile-Cpp 'modules/EternalCommerce/domain/Commerce.cpp' $commerceDomainFlags),(Compile-Cpp 'modules/EternalCommerce/domain/Sha256.cpp' $commerceDomainFlags),$sqliteObject)
 foreach ($name in $moduleNames) {
     $flags = $commonFlags + @('/DETERNAL_MODULE_BUILD')
     $objects = @()
