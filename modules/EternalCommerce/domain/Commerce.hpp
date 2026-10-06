@@ -170,6 +170,7 @@ class Commerce {
                                   std::string_view nbt, std::string_view source,
                                   std::int64_t nowMs);
     DeliveryResult delivery(std::int64_t id) const;
+    DeliveryResult deliveryBySource(std::string_view source) const;
     Status beginDelivery(std::int64_t id, std::int64_t nowMs);
     Status completeDelivery(std::int64_t id, std::int64_t nowMs);
     Status failDelivery(std::int64_t id, std::string_view error, std::int64_t nowMs);

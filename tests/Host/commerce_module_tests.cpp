@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <sqlite3.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -88,6 +89,13 @@ struct Running {
                 "Command failed: " + std::string(output.data()));
         return std::string(output.data());
     }
+    void notice() {
+        EcPhase2OutboxNotice hint{sizeof(hint), EC_PHASE2_STRUCT_VERSION, 0, native->instance_epoch,
+                                  0};
+        EmEvent event{sizeof(event), EM_STRUCT_VERSION, {"core.outbox.changed", 19, 0}, &hint,
+                      sizeof(hint), EC_PHASE2_STRUCT_VERSION, 0};
+        require(host->publishEvent(event) == EM_OK, "Formal EventBus publish failed");
+    }
 
     explicit Running(const std::filesystem::path &root) {
         host = std::make_unique<Host>();
@@ -135,6 +143,22 @@ void pass(const char *label) {
     ++groups;
     std::cout << "PASS " << label << '\n';
 }
+std::int64_t deliveryCount(const std::filesystem::path &root) {
+    const auto filename = (root / "data/commerce/commerce.sqlite3").u8string();
+    sqlite3 *database{};
+    require(sqlite3_open_v2(reinterpret_cast<const char *>(filename.c_str()), &database,
+                            SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK,
+            "Commerce delivery database not durable");
+    sqlite3_stmt *statement{};
+    const auto code = sqlite3_prepare_v2(database, "SELECT count(*) FROM delivery_requests", -1,
+                                         &statement, nullptr);
+    const bool good = code == SQLITE_OK && sqlite3_step(statement) == SQLITE_ROW;
+    const auto result = good ? sqlite3_column_int64(statement, 0) : -1;
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
+    require(good && result >= 0, "Delivery count query failed");
+    return result;
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -152,6 +176,9 @@ int main(int argc, char **argv) {
         require(reply.find("Commerce transfer accepted") != std::string::npos,
                 "Transfer route did not accept");
         pass("REAL_DLL Commerce transfer authorize and Core submit closed loop");
+        run.notice();
+        require(deliveryCount(scratch.path) >= 1, "Delivery consumer did not record the event");
+        pass("REAL_DLL Commerce delivery consumer registers, dedups and ACKs");
         std::cout << "PASS CommerceModuleTests: " << groups
                   << " groups (REAL_DLL; synthetic identities; REAL_CLIENT NOT RUN)\n";
         return 0;

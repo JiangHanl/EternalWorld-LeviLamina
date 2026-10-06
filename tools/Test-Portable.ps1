@@ -37,7 +37,7 @@ try {
         @{name='ValidationModuleTests';sources=@('tests/Host/validation_module_tests.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp');extra=@()},
         @{name='ConsumerModuleTests';sources=@('tests/Host/consumer_module_tests.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp');extra=@('sqlite3.obj')},
         @{name='ProductionIsolationTests';sources=@('tests/Host/production_isolation_tests.cpp');extra=@()}
-        @{name='CommerceModuleTests';sources=@('tests/Host/commerce_module_tests.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp');extra=@()}
+        @{name='CommerceModuleTests';sources=@('tests/Host/commerce_module_tests.cpp','host/EternalHost/runtime/Host.cpp','host/EternalHost/runtime/Config.cpp');extra=@('sqlite3.obj')}
     )
     foreach ($case in $cases) {
         if ($case.name -eq 'Phase2RuntimeTests' -and (Test-Path -LiteralPath 'modules/EternalCore/api/Phase2Service.cpp' -PathType Leaf)) {

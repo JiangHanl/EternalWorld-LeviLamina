@@ -778,6 +778,26 @@ DeliveryResult Commerce::delivery(std::int64_t id) const {
     }
 }
 
+DeliveryResult Commerce::deliveryBySource(std::string_view source) const {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(source, 64))
+            return {Status::Invalid, std::nullopt, "Invalid delivery source"};
+        Statement q(impl_->db,
+                    "SELECT id,playerUuid,item,nbt,source,status,attemptCount,createdAtMs,"
+                    "updatedAtMs,lastError FROM delivery_requests WHERE source=? LIMIT 1");
+        q.text(1, source);
+        if (!q.row())
+            return {Status::NotFound, std::nullopt, "Delivery not found"};
+        return {Status::Ok,
+                Delivery{q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
+                         q.string(5), q.integer(6), q.integer(7), q.integer(8), q.string(9)},
+                ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), std::nullopt, e.what()};
+    }
+}
+
 Status Commerce::beginDelivery(std::int64_t id, std::int64_t nowMs) {
     std::lock_guard lock(impl_->mutex);
     try {

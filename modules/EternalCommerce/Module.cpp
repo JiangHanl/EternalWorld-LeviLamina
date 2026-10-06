@@ -1,5 +1,6 @@
 #include "EternalSDK/Core/Phase2Client.hpp"
 #include "domain/Commerce.hpp"
+#include <array>
 #include <charconv>
 #include <cstring>
 #include <chrono>
@@ -25,6 +26,8 @@ const EmModuleDescriptor descriptor{sizeof(descriptor), EM_STRUCT_VERSION, view(
 EmHostContext host{};
 Phase2Client client;
 std::unique_ptr<eternal::commerce::Commerce> commerce;
+EcConsumerHandle deliveryConsumer{};
+uint64_t deliverySerial{};
 bool loaded{}, enabled{};
 
 bool zero(EcId128 value) { return value.low == 0 && value.high == 0; }
@@ -73,6 +76,46 @@ EcStatus replyText(EcUtf8Buffer *reply, const char *message, EcStatus status) {
     reply->required = length;
     return status;
 }
+
+EcStatus pollDelivery() noexcept {
+    try {
+        if (!enabled || !commerce)
+            return EC_NOT_READY;
+        std::array<EcPhase2ConsumerEvent, 100> events{};
+        EcPhase2ConsumerQueryRequest query{};
+        query.consumer = deliveryConsumer;
+        query.limit = 100;
+        EcPhase2ConsumerBuffer buffer{};
+        buffer.data = events.data();
+        buffer.capacity = 100;
+        auto result = client.queryConsumer(query, buffer);
+        if (result != EC_OK)
+            return result;
+        for (uint32_t i = 0; i < buffer.count; ++i) {
+            const auto &event = events[i];
+            const auto source = "outbox:" + std::to_string(event.event.event_id);
+            if (commerce->deliveryBySource(source).status == eternal::commerce::Status::NotFound) {
+                const auto created = commerce->createDelivery(hex128(event.event.target), "outbox",
+                                                              "{}", source, wall());
+                if (created.status != eternal::commerce::Status::Ok)
+                    return EC_INTERNAL_ERROR;
+            }
+            EcPhase2ConsumerEventRequest ack{};
+            ack.consumer = deliveryConsumer;
+            ack.delivery = event.delivery;
+            ack.event_id = event.event.event_id;
+            ack.request_id = {++deliverySerial, UINT64_C(0xcc01)};
+            result = client.acknowledgeConsumer(ack);
+            if (result != EC_OK)
+                return result;
+        }
+        return EC_OK;
+    } catch (...) {
+        return EC_INTERNAL_ERROR;
+    }
+}
+
+void EM_CALL onOutboxNotice(void *, const EmEvent *) noexcept { (void)pollDelivery(); }
 
 EcStatus EM_CALL onTransfer(void *, const EcPhase2Invocation *invocation,
                             EcUtf8Buffer *reply) noexcept {
@@ -176,6 +219,27 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Enable() noexcept {
             client.reset();
             return registered;
         }
+#ifdef ETERNAL_COMMERCE_VALIDATION_BUILD
+        EcPhase2ConsumerRegistrationRequest registration{};
+        registration.local_key = ecView("delivery");
+        EcPhase2ConsumerRegistration consumerRegistration{};
+        if (client.registerConsumer(registration, consumerRegistration) != EC_OK) {
+            commerce.reset();
+            client.reset();
+            return EM_UNSUPPORTED;
+        }
+        deliveryConsumer = consumerRegistration.consumer;
+        EmSubscription subscription{sizeof(subscription), EM_STRUCT_VERSION,
+                                    view("core.outbox.changed"), onOutboxNotice, nullptr, 0};
+        uint64_t token{};
+        if (host.subscribe(host.instance, &subscription, &token) != EM_OK) {
+            deliveryConsumer = {};
+            commerce.reset();
+            client.reset();
+            return EM_UNSUPPORTED;
+        }
+        (void)pollDelivery();
+#endif
         enabled = true;
         host.log(host.instance, EM_LOG_INFO, view("Commerce enabled; transfer route registered"));
         return EM_OK;
@@ -192,6 +256,7 @@ extern "C" EM_EXPORT EmStatus EM_CALL EternalModule_Disable() noexcept {
         removal.route_id = ecView("transfer");
         client.unregisterRoute(removal);
     }
+    deliveryConsumer = {};
     enabled = false;
     commerce.reset();
     client.reset();
