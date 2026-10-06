@@ -1,0 +1,51 @@
+{
+  "format_version": 1,
+  "phase": "2",
+  "api": "1.3",
+  "source_commit": "aef8f1214b85e1ac3ebe4ecc0f2ce205a8393618",
+  "source_tree": "4e9cb486bdf96389103dc1f9c5d98a62bde25261",
+  "module_abi": "1.0",
+  "production_asset_feature_bits": 0,
+  "business_modules": "PLANNED / disabled",
+  "development_status": "DEVELOPMENT COMPLETE",
+  "production_status": "PENDING REAL CLIENT",
+  "ci": {
+    "run_id": 37485499524,
+    "job_id": 112344325054,
+    "conclusion": "success",
+    "url": "https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37485499524",
+    "real_bds_in_ci": "NOT RUN",
+    "authenticated_players_in_ci": "NOT RUN"
+  },
+  "production_artifact": {
+    "artifact_id": 11424375618,
+    "download_verified": true,
+    "outer_sha256": "0b3ae6226151d0f9299d3ffd87f5885821dcea96eedc4986b99d150d57c5cc71",
+    "inner_zip_sha256": "997e67b147aee7e8a5f54f5252bda1fc4ede51e016d325bb693c4f6e2cdfdbae",
+    "allowlist_files": 40,
+    "dll_count": 9,
+    "host_sha256": "67917b1e0f3257d031da428005d451d754e857541e42095333fbabee7ed99749",
+    "core_sha256": "aad86956f957b8abbd60e72310d52bf91154d5e8ed2e210e1c35732bd77a3af3"
+  },
+  "isolated_validation_artifact": {
+    "artifact_id": 11424201094,
+    "download_verified": true,
+    "outer_sha256": "eee6de69987598ecd5cc78e0dd198daf0886b93c576f0f99e4022d5b33b06483",
+    "allowlist_files": 5,
+    "validation_core_sha256": "14617aa92e60e5a1fb721effd655ab0ad3e7a2a19f4019ece3a6ec3a91a927e1",
+    "included_in_production_package": false
+  },
+  "real_bds_cloud_dll_regression": {
+    "bds": "1.26.51.1",
+    "levilamina": "26.51.6",
+    "result": "PASS",
+    "startup_runs": 2,
+    "disable_enable": "PASS",
+    "selfcheck": "PASS",
+    "terminal_cleanup": "PASS in both runs",
+    "exit_codes": [0, 0],
+    "players_connected_during_smoke": false,
+    "real_authenticated_player_acceptance": "NOT RUN"
+  },
+  "privacy": "Status and digests only; no identities, balances, databases, worlds or raw logs included."
+}

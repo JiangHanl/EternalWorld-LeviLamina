@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-05。Phase 2 正在完成自动化收尾：SDK 1.3 后台消费者、八身份 harness、重连恢复、真实 DLL 崩溃重放和生产测试入口隔离。新版本的完整测试、云 CI 与云 Artifact 真实 BDS 回归尚待执行，当前不宣称 DEVELOPMENT COMPLETE。日常开发不再要求人工客户端；剩余真实项目集中为 DEFERRED_REAL_CLIENT，生产为 PENDING REAL CLIENT。全部内部门槛通过后允许进入 Phase 3。详细结果见 [报告](docs/PHASE2_TEST_REPORT.md) 与 [策略](TESTING.md)。正式资产 feature bits 仍为 0，七业务模块仍 PLANNED / disabled。
+更新：2026-10-06。Phase 2 自动化收尾完成并标记 DEVELOPMENT COMPLETE：SDK 1.3 后台消费者、八身份 harness、真实 DLL 消费者/崩溃重放与生产隔离的完整构建、测试、云 CI 与云 Artifact 真实 BDS 两轮回归全部通过。生产仍为 PENDING REAL CLIENT，未执行的真实客户端项统一 DEFERRED_REAL_CLIENT，集中在 [开服前清单](PRE_RELEASE_CHECKLIST.md)。正式资产 feature bits 仍为 0，七业务模块仍 PLANNED / disabled。详细结果见 [报告](docs/PHASE2_TEST_REPORT.md)、[策略](TESTING.md) 与 [云证据](docs/phase2-sdk13-cloud-evidence.json)。
 
 SDK 1.2 历史证据保留：12 套测试、152 组计数测试与云产物回归通过，单个真实服主身份、资产、幂等、Builder 授予、SDK 调用和过期页面通过；内部重启保持及正式两轮 BDS 启停通过。不能把这些旧结果移用到新 DLL，或把服务端读取写成真实玩家重连。
 

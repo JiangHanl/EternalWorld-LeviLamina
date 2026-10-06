@@ -1,8 +1,10 @@
 # Phase 2 验收报告
 
-状态：正在按最新自动化策略完成 Phase 2 收尾，尚未把新 SDK 1.3 云 CI / 云 Artifact 回归标记通过。日常人工客户端测试已取消；未执行 REAL_CLIENT 项统一 DEFERRED_REAL_CLIENT。内部全部验收通过后才标记 DEVELOPMENT COMPLETE，生产仍 PENDING REAL CLIENT。规则见 [TESTING.md](../TESTING.md) 与 [开服前清单](../PRE_RELEASE_CHECKLIST.md)。Phase 1.5 历史记录保持原样，以下 SDK 1.2 表格及叙述保留其当时的证据范围，不能当作 1.3 已验收。更新于 2026-10-05。
+状态：Phase 2 自动化收尾完成，SDK 1.3 云 CI / 云 Artifact / 真实 BDS 回归已通过并标记 DEVELOPMENT COMPLETE；生产仍 PENDING REAL CLIENT。未执行的 REAL_CLIENT 项统一 DEFERRED_REAL_CLIENT，集中在 [开服前清单](../PRE_RELEASE_CHECKLIST.md)。规则见 [TESTING.md](../TESTING.md)。Phase 1.5 与 SDK 1.2 历史记录保持原样，以下 SDK 1.2 表格及叙述保留其当时的证据范围。更新于 2026-10-06。
 
-公开汇总：[云产物与生命周期](phase2-cloud-evidence.json)、[服主与内部恢复验收](phase2-player-evidence.json)。只包含状态，不公开身份、余额、数据库或原始日志。
+公开汇总：[SDK 1.3 云产物与生命周期](phase2-sdk13-cloud-evidence.json)、[SDK 1.2 云产物与生命周期](phase2-cloud-evidence.json)、[服主与内部恢复验收](phase2-player-evidence.json)。只包含状态，不公开身份、余额、数据库或原始日志。
+
+SDK 1.3 收尾：源码 aef8f12，[云 CI 37485499524](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37485499524) 通过；两个 Artifact 已下载并核验（正式包 40 文件/9 DLL、独立验证包 5 文件，外层与内包摘要一致）；云正式 DLL 部署到 BDS 1.26.51.1 / LeviLamina 26.51.6 完成两轮真实启停、disable/enable、自检与 terminal cleanup PASS，退出码均为 0，无玩家连接。八身份合成集成、真实 DLL 消费者/崩溃重放与生产隔离全部通过；正式资产 feature bits 仍为 0，七业务模块仍 PLANNED / disabled。
 
 | 层次 | 当前证据 | 状态 |
 |---|---|---|
