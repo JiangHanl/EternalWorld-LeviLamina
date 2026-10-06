@@ -171,6 +171,11 @@ struct Commerce::Impl {
                     if (!v3.row() || v3.string(0) != detail::sha256(detail::schemaV3))
                         throw std::runtime_error("Commerce schema migration checksum mismatch");
                 }
+                if (version >= 4) {
+                    Statement v4(db, "SELECT checksum FROM schema_migration WHERE version=4");
+                    if (!v4.row() || v4.string(0) != detail::sha256(detail::schemaV4))
+                        throw std::runtime_error("Commerce schema migration checksum mismatch");
+                }
                 verifyDatabase(db);
             }
             {
@@ -205,6 +210,13 @@ struct Commerce::Impl {
                 migration3.text(1, detail::sha256(detail::schemaV3));
                 migration3.number(2, now());
                 migration3.done();
+                execute(db, std::string(detail::schemaV4).c_str());
+                Statement migration4(
+                    db, "INSERT INTO schema_migration(version,checksum,appliedAt) "
+                        "VALUES(4,?,?)");
+                migration4.text(1, detail::sha256(detail::schemaV4));
+                migration4.number(2, now());
+                migration4.done();
                 tx.commit();
                 execute(db, "PRAGMA foreign_keys=ON");
                 verifyDatabase(db);
@@ -577,6 +589,126 @@ Status Commerce::returnExpiredConsignment(std::int64_t id, std::int64_t nowMs) {
                          "status='listed'");
         update.number(1, id);
         update.done();
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+AcquisitionResult Commerce::requestAcquisition(std::string_view requesterUuid,
+                                               std::string_view item, std::int64_t amountMinor,
+                                               std::string_view idempotencyKey,
+                                               std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(requesterUuid, 64) || !textValid(item, 256) || amountMinor <= 0 ||
+            !textValid(idempotencyKey, 160) || nowMs < 0)
+            return {Status::Invalid, std::nullopt, 0, false, "Invalid acquisition parameters"};
+        const auto day = dayOf(nowMs);
+        Transaction tx(impl_->db);
+        Statement existing(impl_->db,
+                           "SELECT id,item,amountMinor,status,createdAtMs FROM acquisitions "
+                           "WHERE requesterUuid=? AND idempotencyKey=?");
+        existing.text(1, requesterUuid);
+        existing.text(2, idempotencyKey);
+        std::int64_t used = 0;
+        Statement q(impl_->db,
+                    "SELECT usedMinor FROM acquisition_quota WHERE playerUuid=? AND day=?");
+        q.text(1, requesterUuid);
+        q.number(2, day);
+        if (q.row())
+            used = q.integer(0);
+        const auto remaining = std::max<std::int64_t>(0, acquisitionDailyQuotaMinor - used);
+        if (existing.row()) {
+            Acquisition acq{existing.integer(0), std::string(requesterUuid), existing.string(1),
+                            existing.integer(2), existing.string(3), existing.integer(4)};
+            tx.commit();
+            return {Status::Ok, acq, remaining, true, ""};
+        }
+        if (amountMinor > remaining)
+            return {Status::Conflict, std::nullopt, remaining, false,
+                    "Acquisition quota exceeded"};
+        Statement upsert(impl_->db,
+                         "INSERT INTO acquisition_quota(playerUuid,day,usedMinor) VALUES(?,?,?) "
+                         "ON CONFLICT(playerUuid,day) DO UPDATE SET "
+                         "usedMinor=usedMinor+excluded.usedMinor");
+        upsert.text(1, requesterUuid);
+        upsert.number(2, day);
+        upsert.number(3, amountMinor);
+        upsert.done();
+        Statement insert(impl_->db,
+                         "INSERT INTO acquisitions(requesterUuid,item,amountMinor,idempotencyKey,"
+                         "day,status,createdAtMs) VALUES(?,?,?,?,?,?,?)");
+        insert.text(1, requesterUuid);
+        insert.text(2, item);
+        insert.number(3, amountMinor);
+        insert.text(4, idempotencyKey);
+        insert.number(5, day);
+        insert.text(6, "open");
+        insert.number(7, nowMs);
+        insert.done();
+        const auto id = sqlite3_last_insert_rowid(impl_->db);
+        tx.commit();
+        return {Status::Ok,
+                Acquisition{id, std::string(requesterUuid), std::string(item), amountMinor, "open",
+                            nowMs},
+                remaining - amountMinor, false, ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), std::nullopt, 0, false, e.what()};
+    }
+}
+
+std::int64_t Commerce::remainingAcquisitionQuota(std::string_view requesterUuid,
+                                                 std::int64_t nowMs) const {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(requesterUuid, 64) || nowMs < 0)
+            return 0;
+        const auto day = dayOf(nowMs);
+        std::int64_t used = 0;
+        Statement q(impl_->db,
+                    "SELECT usedMinor FROM acquisition_quota WHERE playerUuid=? AND day=?");
+        q.text(1, requesterUuid);
+        q.number(2, day);
+        if (q.row())
+            used = q.integer(0);
+        return std::max<std::int64_t>(0, acquisitionDailyQuotaMinor - used);
+    } catch (const SqlError &) {
+        return 0;
+    }
+}
+
+Status Commerce::cancelAcquisition(std::int64_t id, std::string_view requesterUuid,
+                                   std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || !textValid(requesterUuid, 64) || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement q(impl_->db,
+                    "SELECT requesterUuid,amountMinor,status,day FROM acquisitions WHERE id=?");
+        q.number(1, id);
+        if (!q.row())
+            return Status::NotFound;
+        if (q.string(0) != requesterUuid || q.string(2) != "open")
+            return Status::Conflict;
+        const auto amountMinor = q.integer(1);
+        const auto day = q.integer(3);
+        Statement update(impl_->db,
+                         "UPDATE acquisitions SET status='cancelled' WHERE id=? AND "
+                         "status='open'");
+        update.number(1, id);
+        update.done();
+        if (sqlite3_changes(impl_->db) != 1)
+            return Status::Conflict;
+        Statement refund(impl_->db,
+                         "UPDATE acquisition_quota SET usedMinor=usedMinor-? WHERE "
+                         "playerUuid=? AND day=?");
+        refund.number(1, amountMinor);
+        refund.text(2, requesterUuid);
+        refund.number(3, day);
+        refund.done();
         tx.commit();
         return Status::Ok;
     } catch (const SqlError &e) {

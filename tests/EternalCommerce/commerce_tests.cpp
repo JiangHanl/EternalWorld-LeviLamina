@@ -70,6 +70,9 @@ int main() {
         const auto sql3 = fs::path(__FILE__).parent_path().parent_path().parent_path() /
                           "migrations/EternalCommerce/003_consignment.sql";
         require(read(sql3) == detail::schemaV3, "SQL and compiled schema v3 differ");
+        const auto sql4 = fs::path(__FILE__).parent_path().parent_path().parent_path() /
+                          "migrations/EternalCommerce/004_acquisition.sql";
+        require(read(sql4) == detail::schemaV4, "SQL and compiled schema v4 differ");
     });
 
     test("gift validation and 2% fee", [&] {
@@ -291,6 +294,68 @@ int main() {
         require(c->item == "minecraft:diamond" && c->nbt == "{tag:1}" &&
                     c->displayName == "钻石",
                 "Metadata lost on restart");
+    });
+
+    test("acquisition quota is enforced", [&] {
+        Commerce commerce((root / "acquisition-quota.sqlite").string());
+        auto r1 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              300 * minorUnitsPerLiang, "k1", 1000000);
+        equal(r1.status, Status::Ok);
+        require(r1.remainingQuotaMinor == 200 * minorUnitsPerLiang, "Wrong remaining quota");
+        auto r2 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              300 * minorUnitsPerLiang, "k2", 1000000);
+        equal(r2.status, Status::Conflict);
+        require(r2.remainingQuotaMinor == 200 * minorUnitsPerLiang,
+                "Wrong remaining after conflict");
+        auto r3 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              200 * minorUnitsPerLiang, "k3", 1000000);
+        equal(r3.status, Status::Ok);
+        require(r3.remainingQuotaMinor == 0, "Quota not exhausted");
+        require(commerce.remainingAcquisitionQuota("alice", 1000000) == 0,
+                "Wrong remaining query");
+    });
+
+    test("acquisition replay is idempotent", [&] {
+        Commerce commerce((root / "acquisition-idem.sqlite").string());
+        auto r1 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              100 * minorUnitsPerLiang, "k1", 1000000);
+        equal(r1.status, Status::Ok);
+        auto r2 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              100 * minorUnitsPerLiang, "k1", 1000000);
+        equal(r2.status, Status::Ok);
+        require(r2.replayed && r2.acquisition->id == r1.acquisition->id, "Not replayed");
+        require(commerce.remainingAcquisitionQuota("alice", 1000000) == 400 * minorUnitsPerLiang,
+                "Quota double-counted");
+    });
+
+    test("acquisition quota decays on the next UTC+8 day", [&] {
+        Commerce commerce((root / "acquisition-day.sqlite").string());
+        constexpr std::int64_t dayMs = 24ll * 3600 * 1000;
+        auto r1 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              500 * minorUnitsPerLiang, "k1", 1000000);
+        equal(r1.status, Status::Ok);
+        require(commerce.remainingAcquisitionQuota("alice", 1000000) == 0, "Quota not used");
+        require(commerce.remainingAcquisitionQuota("alice", 1000000 + dayMs) ==
+                    500 * minorUnitsPerLiang,
+                "Quota did not decay");
+        auto r2 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              500 * minorUnitsPerLiang, "k2", 1000000 + dayMs);
+        equal(r2.status, Status::Ok);
+    });
+
+    test("cancel acquisition refunds quota", [&] {
+        Commerce commerce((root / "acquisition-cancel.sqlite").string());
+        auto r1 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              200 * minorUnitsPerLiang, "k1", 1000000);
+        equal(r1.status, Status::Ok);
+        require(commerce.remainingAcquisitionQuota("alice", 1000000) == 300 * minorUnitsPerLiang,
+                "Quota wrong");
+        equal(commerce.cancelAcquisition(r1.acquisition->id, "alice", 1000000), Status::Ok);
+        require(commerce.remainingAcquisitionQuota("alice", 1000000) == 500 * minorUnitsPerLiang,
+                "Quota not refunded");
+        auto r2 = commerce.requestAcquisition("alice", "minecraft:iron",
+                                              100 * minorUnitsPerLiang, "k2", 1000000);
+        equal(commerce.cancelAcquisition(r2.acquisition->id, "bob", 1000000), Status::Conflict);
     });
 
     std::cout << "Commerce Domain: " << groups
