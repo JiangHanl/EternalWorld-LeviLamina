@@ -65,6 +65,8 @@ struct Runtime::Impl {
     struct Capability{EcCapability token;std::string binding,actorUuid,target,recipient;std::uint64_t identityRevision{},roleRevision{},session{},issuedAt{},expires{};std::uint32_t operation{},asset{};std::int64_t amount{};std::uint64_t roleMask{},expectedRevision{};bool developmentOnly{};};
     struct Route{std::string binding,name;std::uint64_t operations{};EcPhase2CommandCallback callback{};void* user{};unsigned active{};};
     struct Invocation{std::string binding,actorUuid;std::uint64_t identityRevision{},roleRevision{},session{},generation{},issuedAt{},expires{},operations{};bool developmentOnly{};std::string requestId;};
+    struct Consumer{EcConsumerHandle handle;std::string binding,localKey,persistentName;};
+    struct Delivery{EcDeliveryToken token;std::string consumer;std::uint64_t event{},expires{};bool acknowledged{};};
     struct Pending{EcPhase2MutationRequest request{};std::string reason;std::string actorUuid;std::uint64_t expires{};std::optional<Actor> attributedActor;std::string module;std::uint64_t roleRevision{},accountRevision{};};
     struct Cached{std::string fingerprint,content;EcNativeReply reply{};std::uint64_t expires{};std::string bucket;std::uint64_t session{},roleRevision{};};
     static inline Impl* current{};
@@ -79,6 +81,8 @@ struct Runtime::Impl {
     std::map<std::string,Capability> capabilities;
     std::map<std::string,Route> routes;
     std::map<std::string,Invocation> invocations;
+    std::map<std::string,Consumer> consumers;
+    std::map<std::string,Delivery> deliveries;
     unsigned activeCallbacks{};
     std::map<std::string,Pending> pending;
     std::map<std::string,Cached> cache;
@@ -89,6 +93,13 @@ struct Runtime::Impl {
 #endif
     Impl(std::filesystem::path c,std::filesystem::path d,TestClock t):configDirectory(std::move(c)),dataDirectory(std::move(d)),clock(t?std::move(t):TestClock{steady}){}
     std::uint64_t now()const{return clock();}
+    bool developmentAvailable()const{
+#ifdef ETERNAL_CORE_VALIDATION_BUILD
+        return devValidation||validatedAssets;
+#else
+        return false;
+#endif
+    }
     EcStatus gate()const {if(!enabled)return EC_NOT_READY;if(std::this_thread::get_id()!=thread)return EC_WRONG_THREAD;return EC_OK;}
     std::uint64_t productionFeatures()const{
 #ifdef ETERNAL_CORE_RUNTIME_TESTING
@@ -99,7 +110,7 @@ struct Runtime::Impl {
     }
     EcStatus bridge(EcNativeBridgeToken token,bool terminalRevoke=false)const{auto result=gate();if(result==EC_WRONG_THREAD&&terminalRevoke&&ownerThread&&WaitForSingleObject(ownerThread,0)==WAIT_OBJECT_0)result=EC_OK;if(result!=EC_OK)return result;if(!equal(token,ingress.bridge_nonce)||zero(token))return EC_DENIED;return core?EC_OK:EC_UNSUPPORTED;}
     template<class F> static EcStatus call(F action)noexcept{try{if(!current)return EC_NOT_READY;return action(*current);}catch(...){return EC_INTERNAL_ERROR;}}
-    void purge(){auto t=now();std::erase_if(capabilities,[&](const auto& row){return row.second.expires+240000<t;});std::erase_if(pending,[&](const auto& row){return row.second.expires+240000<t;});std::erase_if(cache,[&](const auto& row){return row.second.expires<t;});}
+    void purge(){auto t=now();std::erase_if(capabilities,[&](const auto& row){return row.second.expires+240000<t;});std::erase_if(pending,[&](const auto& row){return row.second.expires+240000<t;});std::erase_if(cache,[&](const auto& row){return row.second.expires<t;});std::erase_if(deliveries,[&](const auto& row){return row.second.expires<t;});}
     std::string diagnostics()const{Json out{{"healthOnly",!core},{"phase2ProductionFeatures",0},{"legacyFeatures",0},{"enabled",enabled},{"developmentValidation",devValidation}};if(core){auto result=core->selfcheck();out["selfcheck"]=name(result.status);if(result.status==Status::Ok){out["players"]=result.value.players;out["transactions"]=result.value.transactions;out["ledgerConsistent"]=result.value.ledgerConsistent;out["receiptsConsistent"]=result.value.receiptsConsistent;}}return out.dump();}
     bool load(){
         if(loaded){failure="Already loaded";return false;}
@@ -111,7 +122,10 @@ struct Runtime::Impl {
                 auto config=Json::parse(input,callback);if(!config.is_object())throw std::runtime_error("Invalid Core config");
                 for(auto it=config.begin();it!=config.end();++it)if(it.key()!="ownerXuid"&&it.key()!="developmentValidation"&&it.key()!="validatedAssets"&&it.key()!="moduleCapabilities"&&it.key()!="roleDisplayNames")throw std::runtime_error("Unknown Core config field");
                 if(config.contains("developmentValidation")){if(!config["developmentValidation"].is_boolean())throw std::runtime_error("Invalid developmentValidation");devValidation=config["developmentValidation"].get<bool>();}
-                if(config.contains("validatedAssets")){if(!config["validatedAssets"].is_boolean())throw std::runtime_error("Invalid validatedAssets");validatedAssets=config["validatedAssets"].get<bool>();if(validatedAssets)throw std::runtime_error("Production asset validation has not completed");}
+                if(config.contains("validatedAssets")){if(!config["validatedAssets"].is_boolean())throw std::runtime_error("Invalid validatedAssets");validatedAssets=config["validatedAssets"].get<bool>();}
+#ifndef ETERNAL_CORE_VALIDATION_BUILD
+                if(devValidation||validatedAssets)throw std::runtime_error("Validation settings are prohibited in a production build");
+#endif
                 if(config.contains("moduleCapabilities")){
                     auto& list=config["moduleCapabilities"];if(!list.is_object()||list.size()>64)throw std::runtime_error("Invalid module policies");
                     constexpr std::array<std::string_view,6> names{EC_MODULE_CAP_PLAYER_READ_NAME,EC_MODULE_CAP_PERMISSION_CHECK_NAME,EC_MODULE_CAP_MONEY_NAME,EC_MODULE_CAP_REPUTATION_NAME,EC_MODULE_CAP_AUDIT_NAME,EC_MODULE_CAP_EVENTS_NAME};
@@ -134,6 +148,7 @@ struct Runtime::Impl {
         shared.get_phase2_features=getFeatures;shared.read_identity_v2=readIdentity;shared.read_roles=readRoles;shared.check_permission=checkPermission;
         shared.read_asset=readAsset;shared.submit_mutation=submitMutation;shared.poll_receipt_v2=pollReceipt;shared.read_outbox=readOutbox;
         shared.register_command_route=registerRoute;shared.unregister_command_route=unregisterRoute;shared.authorize_invocation=authorizeInvocation;
+        shared.register_consumer=registerConsumer;shared.query_consumer=queryConsumer;shared.ack_consumer_event=ackConsumer;shared.retry_consumer_event=retryConsumer;
         ingress={sizeof(ingress),1,EC_NATIVE_INGRESS_MAJOR,EC_NATIVE_INGRESS_MINOR,randomId(),epoch,bindModule,revokeModule,authenticate,disconnect,command,complete,tick,{}};
     }
     EmStatus enable(const EmHostContext& value){
@@ -144,7 +159,7 @@ struct Runtime::Impl {
         // Module adapter owns publication/rollback of all three services.
         return EM_OK;
     }
-    EmStatus disable()noexcept{if(activeCallbacks)return EM_CONFLICT;enabled=false;routes.clear();invocations.clear();capabilities.clear();pending.clear();cache.clear();bindings.clear();sessions.clear();generations.clear();nativeBinding.clear();ingress.bridge_nonce={};if(ownerThread){CloseHandle(ownerThread);ownerThread=nullptr;}if(current==this)current=nullptr;host={};return EM_OK;}
+    EmStatus disable()noexcept{if(activeCallbacks)return EM_CONFLICT;enabled=false;routes.clear();invocations.clear();consumers.clear();deliveries.clear();capabilities.clear();pending.clear();cache.clear();bindings.clear();sessions.clear();generations.clear();nativeBinding.clear();ingress.bridge_nonce={};if(ownerThread){CloseHandle(ownerThread);ownerThread=nullptr;}if(current==this)current=nullptr;host={};return EM_OK;}
     std::string createBinding(std::string module,std::uint64_t generation,std::uint64_t caps,std::uint64_t permissions,std::int64_t ml,std::int64_t rl,std::int64_t mb,std::int64_t rb,std::uint64_t period){auto b=std::make_unique<Binding>();b->module=std::move(module);b->generation=generation;b->caps=caps;b->permissions=permissions;b->moneyLimit=ml;b->repLimit=rl;b->moneyBudget=mb;b->repBudget=rb;b->period=period;b->window=now();b->issuedAt=b->window;b->table=shared;b->table.caller_context=randomId();b->table.caller_generation=generation;auto key=id(b->table.caller_context);bindings.emplace(key,std::move(b));return key;}
     EcStatus extract(const EcNativePlayerIdentity& identity,Session*& out){
         if(!valid(&identity)||identity.is_fully_authenticated!=1||identity.is_simulated||!identity.trusted_xuid||zero(identity.trusted_uuid)||!equal(identity.trusted_uuid,identity.client_uuid)||!text(identity.display_name,128))return EC_DENIED;
@@ -194,7 +209,7 @@ struct Runtime::Impl {
         };
         if(code!=EC_OK)return saveRejected(code);
         auto feature=roleChange?EC_P2_FEATURE_ROLES:EC_P2_FEATURE_ASSET_MUTATION;
-        if(!(productionFeatures()&feature)&&!(devValidation&&(trustedDevelopment||cap->developmentOnly))){code=EC_UNSUPPORTED;return saveRejected(code);}
+        if(!(productionFeatures()&feature)&&!(developmentAvailable()&&(trustedDevelopment||cap->developmentOnly))){code=EC_UNSUPPORTED;return saveRejected(code);}
         if(roleChange&&(request.role_mask&~EC_P2_ROLE_MUTABLE_ALL)){code=EC_DENIED;return saveRejected(code);}
         auto meta=metadata(request,*cap,*b,*reason);
         auto prior=core->receipt(session->actor,id(request.meta.idempotency_key),meta);
@@ -212,7 +227,68 @@ struct Runtime::Impl {
         if(result.status==Status::Ok&&!result.replayed&&moneyChange){auto& spent=request.asset==EC_P2_ASSET_REPUTATION?b->repSpent:b->moneySpent;spent+=request.minor_units;}
         return result;
     }
-    static EcStatus EC_CALL getFeatures(EcPhase2FeatureInfo* out)noexcept{return call([&](Impl& self)->EcStatus{if(!valid(out))return EC_INVALID_ARGUMENT;auto code=self.gate();if(code!=EC_OK)return code;*out=dto<EcPhase2FeatureInfo>();out->instance_epoch=self.epoch;out->lifecycle=EC_LIFECYCLE_READY;out->domain_thread_model=EC_THREAD_DOMAIN_GAME_THREAD;out->implemented=self.core?EC_P2_FEATURE_ALL:0;out->development_only=self.devValidation&&self.core?EC_P2_FEATURE_ALL:0;out->enabled=self.productionFeatures();return EC_OK;});}
+    EcStatus consumerScope(EcCallerContext context,Binding*& binding)const{
+        auto code=gate();if(code!=EC_OK)return code;if(!core)return EC_UNSUPPORTED;
+        auto found=bindings.find(id(context));if(found==bindings.end()||!found->second->active)return EC_DENIED;
+        binding=found->second.get();auto required=EC_MODULE_CAP_EVENTS|EC_MODULE_CAP_AUDIT;
+        if((binding->caps&required)!=required||!(binding->permissions&permissionBit(EC_P2_OP_OUTBOX_READ)))return EC_DENIED;
+        return (productionFeatures()&EC_P2_FEATURE_OUTBOX_CONSUMERS)||developmentAvailable()?EC_OK:EC_UNSUPPORTED;
+    }
+    EcStatus consumer(EcCallerContext context,EcConsumerHandle handle,Consumer*& consumerOut,Binding*& binding){
+        auto code=consumerScope(context,binding);if(code!=EC_OK)return code;
+        auto found=consumers.find(id(handle));if(found==consumers.end()||found->second.binding!=id(context))return EC_DENIED;
+        consumerOut=&found->second;return EC_OK;
+    }
+    EcStatus delivery(EcCallerContext context,EcConsumerHandle handle,EcDeliveryToken token,std::uint64_t event,Consumer*& consumerOut,Delivery*& deliveryOut){
+        Binding* binding=nullptr;auto code=consumer(context,handle,consumerOut,binding);if(code!=EC_OK)return code;
+        auto found=deliveries.find(id(token));if(found==deliveries.end()||found->second.consumer!=id(handle)||found->second.event!=event)return EC_DENIED;
+        if(found->second.expires<=now())return EC_EXPIRED;deliveryOut=&found->second;return EC_OK;
+    }
+    EcStatus projectEvent(const OutboxEvent& event,EcPhase2OutboxEvent& row){
+        auto target=core->player(event.targetUuid);if(!target.player||!event.txId.starts_with("tx_"))return EC_STORAGE_FAILURE;
+        auto payload=Json::parse(event.payload);row=dto<EcPhase2OutboxEvent>();row.event_id=static_cast<uint64_t>(event.id);row.receipt_id=parseId(std::string_view(event.txId).substr(3));row.target=playerId(target.player->playerId);row.type=event.type=="role_changed"?EC_P2_OUTBOX_ROLE_CHANGED:EC_P2_OUTBOX_ASSET_CHANGED;row.request_id=parseId(event.requestId);row.occurred_at_unix_ms=static_cast<uint64_t>(event.createdAt);
+        if(row.type==EC_P2_OUTBOX_ROLE_CHANGED){row.asset=EC_P2_ASSET_NONE;row.account_revision=target.player->permissionRevision;}
+        else{auto label=payload.value("asset","");if(label!="coin"&&label!="reputation")return EC_STORAGE_FAILURE;row.asset=label=="reputation"?EC_P2_ASSET_REPUTATION:EC_P2_ASSET_MONEY;auto balance=core->balance(event.targetUuid,asset(row.asset));if(balance.status!=Status::Ok)return status(balance.status);row.authoritative_balance=balance.amount;row.account_revision=balance.revision;}
+        return EC_OK;
+    }
+    static EcStatus EC_CALL registerConsumer(const EcPhase2ConsumerRegistrationRequest* request,EcPhase2ConsumerRegistration* out)noexcept{return call([&](Impl& self)->EcStatus{
+        if(!valid(request)||!valid(out)||request->reserved)return EC_INVALID_ARGUMENT;
+        auto local=text(request->local_key,32);if(!local||!moduleName(*local))return EC_INVALID_ARGUMENT;
+        Binding* binding=nullptr;auto code=self.consumerScope(request->caller_context,binding);if(code!=EC_OK)return code;auto bindingKey=id(request->caller_context);
+        auto found=std::find_if(self.consumers.begin(),self.consumers.end(),[&](const auto& row){return row.second.binding==bindingKey&&row.second.localKey==*local;});
+        if(found==self.consumers.end()){
+            auto count=std::count_if(self.consumers.begin(),self.consumers.end(),[&](const auto& row){return row.second.binding==bindingKey;});if(count>=4||self.consumers.size()>=128)return EC_LIMIT_EXCEEDED;
+            auto handle=randomId();auto persistent="sdk."+detail::sha256(binding->module+":"+*local);code=status(self.core->registerConsumer(persistent));if(code!=EC_OK)return code;
+            found=self.consumers.emplace(id(handle),Consumer{handle,bindingKey,*local,std::move(persistent)}).first;
+        }
+        *out=dto<EcPhase2ConsumerRegistration>();out->consumer=found->second.handle;out->caller_generation=binding->generation;out->instance_epoch=self.epoch;return EC_OK;
+    });}
+    static EcStatus EC_CALL queryConsumer(const EcPhase2ConsumerQueryRequest* request,EcPhase2ConsumerBuffer* out)noexcept{return call([&](Impl& self)->EcStatus{
+        if(!valid(request)||!valid(out)||request->reserved0||request->reserved1||request->limit<1||request->limit>100||out->reserved0||out->reserved1||out->capacity>100||(!out->data&&out->capacity))return EC_INVALID_ARGUMENT;
+        Consumer* consumer=nullptr;Binding* binding=nullptr;auto code=self.consumer(request->caller_context,request->consumer,consumer,binding);if(code!=EC_OK)return code;
+        auto events=self.core->outboxFor(consumer->persistentName,request->limit);out->count=0;out->required=static_cast<uint32_t>(events.size());out->last_event_id=events.empty()?0:static_cast<uint64_t>(events.back().id);
+        if(out->capacity<events.size())return EC_BUFFER_TOO_SMALL;self.purge();if(self.now()>UINT64_MAX-300000)return EC_LIMIT_EXCEEDED;
+        std::vector<EcPhase2ConsumerEvent> rows;rows.reserve(events.size());std::size_t needed=0;auto consumerKey=id(request->consumer);
+        for(const auto& event:events){auto row=EcPhase2ConsumerEvent{};code=self.projectEvent(event,row.event);if(code!=EC_OK)return code;row.retry_count=event.retryCount;row.next_attempt_at_unix_ms=static_cast<uint64_t>(event.nextAttemptAt);row.delivery_state=event.deliveryStatus=="offline"?EC_P2_DELIVERY_OFFLINE:event.deliveryStatus=="retry"?EC_P2_DELIVERY_RETRY:EC_P2_DELIVERY_PENDING;
+            auto token=std::find_if(self.deliveries.begin(),self.deliveries.end(),[&](const auto& value){return value.second.consumer==consumerKey&&value.second.event==static_cast<uint64_t>(event.id)&&value.second.expires>self.now();});
+            if(token==self.deliveries.end())++needed;else row.delivery=token->second.token;rows.push_back(row);
+        }
+        if(needed>4096-self.deliveries.size())return EC_LIMIT_EXCEEDED;
+        for(auto& row:rows)if(zero(row.delivery)){row.delivery=randomId();self.deliveries.emplace(id(row.delivery),Delivery{row.delivery,consumerKey,row.event.event_id,self.now()+300000,false});}
+        std::copy(rows.begin(),rows.end(),out->data);out->count=out->required;return EC_OK;
+    });}
+    static EcStatus EC_CALL ackConsumer(const EcPhase2ConsumerEventRequest* request)noexcept{return call([&](Impl& self)->EcStatus{
+        if(!valid(request)||request->reserved||zero(request->request_id)||!request->event_id||request->event_id>static_cast<std::uint64_t>(INT64_MAX))return EC_INVALID_ARGUMENT;
+        Consumer* consumer=nullptr;Delivery* delivered=nullptr;auto code=self.delivery(request->caller_context,request->consumer,request->delivery,request->event_id,consumer,delivered);if(code!=EC_OK)return code;
+        if(delivered->acknowledged)return EC_OK;code=status(self.core->acknowledgeOutbox(consumer->persistentName,static_cast<int64_t>(request->event_id)));if(code==EC_OK)delivered->acknowledged=true;return code;
+    });}
+    static EcStatus EC_CALL retryConsumer(const EcPhase2ConsumerRetryRequest* request)noexcept{return call([&](Impl& self)->EcStatus{
+        if(!valid(request)||request->reserved[0]||request->reserved[1]||zero(request->request_id)||!request->event_id||request->event_id>static_cast<std::uint64_t>(INT64_MAX)||request->delay_ms>86400000)return EC_INVALID_ARGUMENT;
+        auto error=text(request->error,512);if(!error)return EC_INVALID_UTF8;
+        Consumer* consumer=nullptr;Delivery* delivered=nullptr;auto code=self.delivery(request->caller_context,request->consumer,request->delivery,request->event_id,consumer,delivered);if(code!=EC_OK)return code;if(delivered->acknowledged)return EC_CONFLICT;
+        return status(self.core->recordOutboxAttempt(consumer->persistentName,static_cast<int64_t>(request->event_id),*error,static_cast<int64_t>(request->delay_ms)));
+    });}
+    static EcStatus EC_CALL getFeatures(EcPhase2FeatureInfo* out)noexcept{return call([&](Impl& self)->EcStatus{if(!valid(out))return EC_INVALID_ARGUMENT;auto code=self.gate();if(code!=EC_OK)return code;*out=dto<EcPhase2FeatureInfo>();out->instance_epoch=self.epoch;out->lifecycle=EC_LIFECYCLE_READY;out->domain_thread_model=EC_THREAD_DOMAIN_GAME_THREAD;out->implemented=self.core?EC_P2_FEATURE_ALL:0;out->development_only=self.developmentAvailable()&&self.core?EC_P2_FEATURE_ALL:0;out->enabled=self.productionFeatures();return EC_OK;});}
     EcStatus production(const EcPhase2RequestMeta& meta,std::uint64_t feature)const{
         auto code=gate();if(code!=EC_OK)return code;if(!core)return EC_UNSUPPORTED;
         auto cap=capabilities.find(id(meta.capability));if(cap==capabilities.end())return EC_DENIED;
@@ -220,7 +296,7 @@ struct Runtime::Impl {
         if(cap->second.expires<=now())return EC_EXPIRED;
         auto s=sessions.find(cap->second.actorUuid);if(s==sessions.end()||!s->second.online||s->second.generation!=cap->second.session)return EC_REVOKED;
         auto actor=core->player(s->second.actor.playerId());if(!actor.player||actor.player->identityVersion!=cap->second.identityRevision||actor.player->permissionRevision!=cap->second.roleRevision)return EC_REVOKED;
-        return (productionFeatures()&feature)==feature||(devValidation&&cap->second.developmentOnly)?EC_OK:EC_UNSUPPORTED;
+        return (productionFeatures()&feature)==feature||(developmentAvailable()&&cap->second.developmentOnly)?EC_OK:EC_UNSUPPORTED;
     }
     static EcStatus EC_CALL registerRoute(const EcPhase2CommandRouteRequest* request)noexcept{return call([&](Impl& self)->EcStatus{
         auto code=self.gate();if(code!=EC_OK)return code;if(!self.core)return EC_UNSUPPORTED;
@@ -268,7 +344,7 @@ struct Runtime::Impl {
         else if(!mutation&&!roles&&!self.readTarget(s->second,*target.player)&&!(op==EC_P2_OP_ASSET_READ&&self.core->hasRole(s->second.actor,Role::EconomyManager)))return EC_DENIED;
         auto recipient=zero(request->recipient)?PlayerResult{}:self.core->player(playerKey(request->recipient));if(!zero(request->recipient)&&!recipient.player)return EC_NOT_FOUND;
         auto key=self.issue(s->second,b->first,op,request->asset,target.player->uuid,recipient.player?recipient.player->uuid:"",request->minor_units,request->role_mask);
-        auto& grant=self.capabilities.at(key);grant.expectedRevision=request->expected_revision;grant.developmentOnly=ticket.developmentOnly&&self.devValidation;
+        auto& grant=self.capabilities.at(key);grant.expectedRevision=request->expected_revision;grant.developmentOnly=ticket.developmentOnly&&self.developmentAvailable();
         EcPhase2RequestMeta meta{sizeof(meta),1,b->second->table.caller_context,grant.token,{},{},request->expected_revision,0};Capability* cap=nullptr;Binding* approved=nullptr;Session* subject=nullptr;
         code=self.authorize(meta,sizeof(meta),op,request->asset,target.player->uuid,recipient.player?recipient.player->uuid:"",request->minor_units,request->role_mask,cap,approved,subject);
         if(code!=EC_OK){self.capabilities.erase(key);return code;}
@@ -320,7 +396,7 @@ struct Runtime::Impl {
     });}
     static EcStatus EC_CALL readOutbox(const EcPhase2OutboxRequest* request,EcPhase2OutboxBuffer* out)noexcept{return call([&](Impl& self)->EcStatus{if(!request||!valid(out)||request->reserved0||request->reserved1||out->reserved0||out->reserved1||(!out->data&&out->capacity)||request->limit<1||request->limit>100||request->after_event_id>static_cast<std::uint64_t>(INT64_MAX))return EC_INVALID_ARGUMENT;auto code=self.production(request->meta,EC_P2_FEATURE_OUTBOX);if(code!=EC_OK)return code;auto cap=self.capabilities.find(id(request->meta.capability));if(cap==self.capabilities.end())return EC_DENIED;Capability* grant=nullptr;Binding* b=nullptr;Session* s=nullptr;code=self.authorize(request->meta,sizeof(*request),EC_P2_OP_OUTBOX_READ,0,cap->second.actorUuid,"",0,0,grant,b,s);if(code!=EC_OK)return code;std::vector<EcPhase2OutboxEvent> rows;auto entries=self.core->eventsAfter(static_cast<int64_t>(request->after_event_id),request->limit);out->next_event_id=request->after_event_id;for(const auto& event:entries){out->next_event_id=static_cast<uint64_t>(event.id);if(event.targetUuid!=s->actor.uuid()&&!self.core->hasRole(s->actor,Role::Owner)&&!self.core->hasRole(s->actor,Role::Admin))continue;auto target=self.core->player(event.targetUuid);if(!target.player)continue;auto payload=Json::parse(event.payload);auto row=dto<EcPhase2OutboxEvent>();row.event_id=static_cast<uint64_t>(event.id);row.receipt_id=parseId(std::string_view(event.txId).substr(3));row.target=playerId(target.player->playerId);row.type=event.type=="role_changed"?EC_P2_OUTBOX_ROLE_CHANGED:EC_P2_OUTBOX_ASSET_CHANGED;row.request_id=parseId(event.requestId);row.occurred_at_unix_ms=static_cast<uint64_t>(event.createdAt);if(row.type==EC_P2_OUTBOX_ROLE_CHANGED){row.asset=EC_P2_ASSET_NONE;row.account_revision=target.player->permissionRevision;}else{auto label=payload.value("asset","");if(label!="coin"&&label!="reputation")return EC_STORAGE_FAILURE;row.asset=label=="reputation"?EC_P2_ASSET_REPUTATION:EC_P2_ASSET_MONEY;auto currentBalance=self.core->balance(event.targetUuid,asset(row.asset));if(currentBalance.status!=Status::Ok)return status(currentBalance.status);row.authoritative_balance=currentBalance.amount;row.account_revision=currentBalance.revision;}rows.push_back(row);}out->required=static_cast<uint32_t>(rows.size());out->count=0;if(out->capacity<rows.size())return EC_BUFFER_TOO_SMALL;std::copy(rows.begin(),rows.end(),out->data);out->count=out->required;return EC_OK;});}
     static EcStatus EC_CALL bindModule(EcNativeBridgeToken nonce,const EcNativeModuleBindingRequest* request,EcNativeModuleBindingResult* out)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);if(code!=EC_OK)return code;if(!valid(request)||!valid(out)||request->flags||request->reserved0||request->reserved1||(request->approved_module_capabilities&~EC_MODULE_CAP_ALL)||(request->approved_permissions&~EC_P2_PERMISSION_ALL)||!request->module_generation||!request->budget_period_ms||request->money_limit_per_request<0||request->reputation_limit_per_request<0||request->money_budget_per_period<0||request->reputation_budget_per_period<0)return EC_INVALID_ARGUMENT;auto module=text(request->module_id,64);if(!module||!moduleName(*module))return EC_INVALID_ARGUMENT;auto policy=self.policies.find(*module);if(policy==self.policies.end())return EC_DENIED;auto caps=policy->second&request->approved_module_capabilities;if(!caps)return EC_DENIED;if(self.bindings.size()>=128)return EC_LIMIT_EXCEEDED;if(self.generations[*module]>=request->module_generation)return EC_CONFLICT;auto key=self.createBinding(*module,request->module_generation,caps,request->approved_permissions,std::min<INT64>(request->money_limit_per_request,1000000),std::min<INT64>(request->reputation_limit_per_request,10000),std::min<INT64>(request->money_budget_per_period,6000000),std::min<INT64>(request->reputation_budget_per_period,60000),std::max<std::uint64_t>(request->budget_period_ms,60000));self.generations[*module]=request->module_generation;auto& b=*self.bindings.at(key);*out=dto<EcNativeModuleBindingResult>();out->scoped_api=&b.table;out->table_size=sizeof(b.table);out->caller_context=b.table.caller_context;out->caller_generation=b.generation;out->instance_epoch=self.epoch;return EC_OK;});}
-    static EcStatus EC_CALL revokeModule(EcNativeBridgeToken nonce,const EcNativeModuleRevokeRequest* request)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce,true);if(code!=EC_OK)return code;if(!valid(request)||request->reserved||!text(request->reason,256))return EC_INVALID_ARGUMENT;auto binding=self.bindings.find(id(request->caller_context));if(binding==self.bindings.end())return EC_NOT_FOUND;if(binding->second->generation!=request->caller_generation)return EC_CONFLICT;if(self.activeCallbacks)return EC_CONFLICT;binding->second->active=false;auto key=binding->first;std::erase_if(self.routes,[&](const auto& row){return row.second.binding==key;});std::erase_if(self.invocations,[&](const auto& row){return row.second.binding==key;});std::erase_if(self.capabilities,[&](const auto& row){return row.second.binding==key;});return EC_OK;});}
+    static EcStatus EC_CALL revokeModule(EcNativeBridgeToken nonce,const EcNativeModuleRevokeRequest* request)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce,true);if(code!=EC_OK)return code;if(!valid(request)||request->reserved||!text(request->reason,256))return EC_INVALID_ARGUMENT;auto binding=self.bindings.find(id(request->caller_context));if(binding==self.bindings.end())return EC_NOT_FOUND;if(binding->second->generation!=request->caller_generation)return EC_CONFLICT;if(self.activeCallbacks)return EC_CONFLICT;binding->second->active=false;auto key=binding->first;std::erase_if(self.routes,[&](const auto& row){return row.second.binding==key;});std::erase_if(self.invocations,[&](const auto& row){return row.second.binding==key;});std::erase_if(self.deliveries,[&](const auto& row){auto consumer=self.consumers.find(row.second.consumer);return consumer==self.consumers.end()||consumer->second.binding==key;});std::erase_if(self.consumers,[&](const auto& row){return row.second.binding==key;});std::erase_if(self.capabilities,[&](const auto& row){return row.second.binding==key;});return EC_OK;});}
     static EcStatus EC_CALL authenticate(EcNativeBridgeToken nonce,const EcNativePlayerIdentity* request,EcNativeJoinResult* out)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);if(code!=EC_OK)return code;if(!valid(request)||!valid(out)||request->is_fully_authenticated!=1||request->is_simulated||!request->trusted_xuid||zero(request->trusted_uuid)||!equal(request->trusted_uuid,request->client_uuid))return EC_DENIED;auto display=text(request->display_name,128);if(!display)return EC_INVALID_UTF8;auto result=self.core->ensurePlayer({uuid(request->trusted_uuid),std::to_string(request->trusted_xuid),*display});if(result.status!=Status::Ok||!result.actor)return status(result.status);auto found=self.sessions.find(result.actor->uuid());if(found==self.sessions.end()){if(self.sessions.size()>=4096)return EC_LIMIT_EXCEEDED;found=self.sessions.emplace(result.actor->uuid(),Session{*result.actor,1,true}).first;}else{if(found->second.generation==UINT64_MAX)return EC_LIMIT_EXCEEDED;++found->second.generation;found->second.actor=*result.actor;found->second.online=true;}*out=dto<EcNativeJoinResult>();out->player_id=playerId(result.actor->playerId());out->session_token=randomId();out->identity_revision=result.actor->identityVersion();out->role_revision=self.core->permissionRevision(result.actor->uuid()).value_or(0);out->session_generation=found->second.generation;out->created=result.created;return EC_OK;});}
     static EcStatus EC_CALL disconnect(EcNativeBridgeToken nonce,const EcNativeDisconnectRequest* request)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);if(code!=EC_OK)return code;if(!valid(request)||request->reserved||zero(request->client_uuid))return EC_INVALID_ARGUMENT;auto found=self.sessions.find(uuid(request->client_uuid));if(found==self.sessions.end())return EC_NOT_FOUND;if(request->expected_session_generation&&request->expected_session_generation!=found->second.generation)return EC_CONFLICT;found->second.online=false;return EC_OK;});}
     PlayerResult select(std::string_view selector,const Session& caller){if(selector=="self")return core->player(caller.actor.playerId());if(selector.starts_with("player_"))return core->player(selector);return core->findPlayerByDisplayName(selector);}
@@ -355,16 +431,16 @@ struct Runtime::Impl {
             auto key=b->first+"/"+route;auto registered=routes.find(key);if(registered==routes.end())return result(EC_NOT_FOUND,"Module route is unavailable");
             if(activeCallbacks>=16||invocations.size()>=128||now()>UINT64_MAX-60000)return result(EC_LIMIT_EXCEEDED,"Invocation capacity reached");
             auto snapshot=registered->second;auto token=randomId();auto issued=now();auto revision=core->permissionRevision(session->actor.uuid()).value_or(0);
-            invocations.emplace(id(token),Invocation{b->first,session->actor.uuid(),session->actor.identityVersion(),revision,session->generation,b->second->generation,issued,issued+60000,snapshot.operations,devValidation,id(request.request_id)});
+            invocations.emplace(id(token),Invocation{b->first,session->actor.uuid(),session->actor.identityVersion(),revision,session->generation,b->second->generation,issued,issued+60000,snapshot.operations,developmentAvailable(),id(request.request_id)});
             ++registered->second.active;++activeCallbacks;
             struct Cleanup{Impl& self;std::string key,token;~Cleanup(){self.invocations.erase(token);auto route=self.routes.find(key);if(route!=self.routes.end()&&route->second.active)--route->second.active;--self.activeCallbacks;}} cleanup{*this,key,id(token)};
-            auto invocation=dto<EcPhase2Invocation>();invocation.invocation=token;invocation.caller_context=b->second->table.caller_context;invocation.subject=playerId(session->actor.playerId());invocation.request_id=request.request_id;invocation.identity_revision=session->actor.identityVersion();invocation.permission_revision=revision;invocation.session_generation=session->generation;invocation.module_generation=b->second->generation;invocation.issued_at_steady_ms=issued;invocation.expires_at_steady_ms=issued+60000;invocation.arguments={args.data(),static_cast<uint32_t>(args.size()),0};if(devValidation)invocation.flags=EC_P2_INVOCATION_DEVELOPMENT_ONLY;
+            auto invocation=dto<EcPhase2Invocation>();invocation.invocation=token;invocation.caller_context=b->second->table.caller_context;invocation.subject=playerId(session->actor.playerId());invocation.request_id=request.request_id;invocation.identity_revision=session->actor.identityVersion();invocation.permission_revision=revision;invocation.session_generation=session->generation;invocation.module_generation=b->second->generation;invocation.issued_at_steady_ms=issued;invocation.expires_at_steady_ms=issued+60000;invocation.arguments={args.data(),static_cast<uint32_t>(args.size()),0};if(developmentAvailable())invocation.flags=EC_P2_INVOCATION_DEVELOPMENT_ONLY;
             std::array<char,16384> output{};EcUtf8Buffer reply{output.data(),static_cast<uint32_t>(output.size()),0};
             code=snapshot.callback(snapshot.user,&invocation,&reply);
             if(code<EC_OK||code>EC_INTERNAL_ERROR||reply.data!=output.data()||reply.capacity!=output.size()||reply.required>output.size())return result(EC_INVALID_ARGUMENT,"Invalid module callback reply");
             if(!reply.required)return result(code,"Module callback completed");
             if(output[reply.required-1]||!textValid({output.data(),reply.required-1},output.size()-1,true))return result(EC_INVALID_UTF8,"Invalid module callback text");
-            return result(code,{output.data(),reply.required-1},devValidation?EC_NATIVE_REPLY_DEVELOPMENT_ONLY:0);
+            return result(code,{output.data(),reply.required-1},developmentAvailable()?EC_NATIVE_REPLY_DEVELOPMENT_ONLY:0);
         }
         if(nativeBinding.empty())return result(EC_DENIED,"Core native module capability policy denied");
         auto& binding=*bindings.at(nativeBinding);
@@ -388,8 +464,9 @@ struct Runtime::Impl {
         if(op=="receipt"){
             std::string key,extra;if(!(command>>key)||command>>extra||!textValid(key,160))return result(EC_INVALID_ARGUMENT,"receipt key");if(!(binding.caps&EC_MODULE_CAP_AUDIT))return result(EC_DENIED,"Module receipt capability denied");DomainRequestMetadata metadata;metadata.moduleId="core";auto receipt=core->receipt(session->actor,id(keyId(key)),metadata);return result(status(receipt.status),receipt.receipt.empty()?"Receipt not found":receipt.receipt);
         }
+#ifdef ETERNAL_CORE_VALIDATION_BUILD
         if(op=="authority-test"){
-            std::string extra;if(command>>extra)return result(EC_INVALID_ARGUMENT,"authority-test");if(!devValidation)return result(EC_UNSUPPORTED,"Development validation is disabled");if(pending.size()>=256)return result(EC_LIMIT_EXCEEDED,"Pending action limit reached");auto target=core->player(session->actor.playerId());if(!target.player)return result(EC_NOT_FOUND,"Player missing");
+            std::string extra;if(command>>extra)return result(EC_INVALID_ARGUMENT,"authority-test");if(!developmentAvailable())return result(EC_UNSUPPORTED,"Development validation is disabled");if(pending.size()>=256)return result(EC_LIMIT_EXCEEDED,"Pending action limit reached");auto target=core->player(session->actor.playerId());if(!target.player)return result(EC_NOT_FOUND,"Player missing");
             const std::string reason="Native permission diagnostic test";auto requestDto=actionRequest(*session,request.request_id,EC_P2_OP_ASSET_ADD,EC_P2_ASSET_MONEY,*target.player,nullptr,100,0,"form_"+id(request.request_id),reason);requestDto.meta.expected_revision=core->balance(session->actor.uuid()).revision;capabilities.at(id(requestDto.meta.capability)).expectedRevision=requestDto.meta.expected_revision;
             Capability* cap=nullptr;Binding* b=nullptr;Session* subject=nullptr;code=authorize(requestDto.meta,sizeof(requestDto),requestDto.operation,requestDto.asset,target.player->uuid,"",requestDto.minor_units,0,cap,b,subject);
             if(code!=EC_OK){audit(code,session,"core","authority-test",session->actor.uuid());return result(code,"MoneyAdjust permission diagnostic denied");}
@@ -404,6 +481,9 @@ struct Runtime::Impl {
         else{auto end=std::from_chars(value.data(),value.data()+value.size(),amount);if(end.ec!=std::errc{}||end.ptr!=value.data()+value.size()||!amount||amount==INT64_MIN)return result(EC_INVALID_ARGUMENT,"Invalid integer amount");if(op=="transfer"){if(amount<0)return result(EC_INVALID_ARGUMENT,"Transfer amount must be positive");which=EC_P2_ASSET_MONEY;operation=EC_P2_OP_TRANSFER;recipient=*target.player;target=core->player(session->actor.playerId());}else{if(kind!="money"&&kind!="reputation")return result(EC_INVALID_ARGUMENT,"Unknown asset");which=kind=="money"?EC_P2_ASSET_MONEY:EC_P2_ASSET_REPUTATION;operation=amount<0?EC_P2_OP_ASSET_DEDUCT:EC_P2_OP_ASSET_ADD;if(amount<0)amount=-amount;}}
         auto requestDto=actionRequest(*session,request.request_id,operation,which,*target.player,recipient?&*recipient:nullptr,amount,roleMask,key,reason);auto answer=mutate(requestDto,true,code);
         return result(code,answer.receipt.empty()?"Core request rejected":answer.receipt,which?EC_NATIVE_REPLY_DEVELOPMENT_ONLY:0);
+#else
+        return result(EC_INVALID_ARGUMENT,"Unknown Core native command");
+#endif
     }
     EcStatus deliver(const Cached& value,EcNativeReply* reply,EcUtf8Buffer* out){*reply=value.reply;auto code=buffer(out,value.content);return code==EC_OK?value.reply.result:code;}
     std::string cacheBucket(const EcNativePlayerIdentity& player,bool form,std::uint64_t& generation,std::uint64_t& revision){
@@ -431,7 +511,11 @@ struct Runtime::Impl {
         if(request->origin==EC_NATIVE_ORIGIN_SERVER_CONSOLE){auto& p=request->player;if(p.struct_size||p.struct_version||!zero(p.trusted_uuid)||!zero(p.client_uuid)||p.trusted_xuid||p.display_name.data||p.display_name.length||p.display_name.reserved||p.is_fully_authenticated||p.is_simulated)return EC_DENIED;}else if(!valid(&request->player)||!text(request->player.display_name,128))return EC_INVALID_ARGUMENT;
         std::uint64_t generation=0,revision=0;auto bucket=request->origin==EC_NATIVE_ORIGIN_SERVER_CONSOLE?std::string("console:server"):self.cacheBucket(request->player,false,generation,revision);if(bucket.empty())return EC_DENIED;
         auto fingerprint=Json{{"kind","command"},{"origin",request->origin},{"player",identityFingerprint(request->player)},{"text",*commandText}}.dump();return self.cachedReply(request->request_id,std::move(fingerprint),std::move(bucket),generation,revision,reply,out,[&]{return self.execute(*request,*commandText);});});}
-    static EcStatus EC_CALL complete(EcNativeBridgeToken nonce,const EcNativeActionCompletionRequest* request,EcNativeReply* reply,EcUtf8Buffer* out)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);if(code!=EC_OK)return code;if(!valid(request)||!valid(reply)||!out||zero(request->request_id)||zero(request->pending_action)||request->reserved0||request->reserved1||request->selected_button< -1||request->selected_button>1||!valid(&request->player)||!text(request->player.display_name,128))return EC_INVALID_ARGUMENT;
+    static EcStatus EC_CALL complete(EcNativeBridgeToken nonce,const EcNativeActionCompletionRequest* request,EcNativeReply* reply,EcUtf8Buffer* out)noexcept{
+#ifndef ETERNAL_CORE_VALIDATION_BUILD
+        (void)request;(void)reply;(void)out;return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);return code==EC_OK?EC_UNSUPPORTED:code;});
+#else
+        return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);if(code!=EC_OK)return code;if(!valid(request)||!valid(reply)||!out||zero(request->request_id)||zero(request->pending_action)||request->reserved0||request->reserved1||request->selected_button< -1||request->selected_button>1||!valid(&request->player)||!text(request->player.display_name,128))return EC_INVALID_ARGUMENT;
         std::uint64_t generation=0,revision=0;auto bucket=self.cacheBucket(request->player,true,generation,revision);if(bucket.empty())return EC_DENIED;
         auto fingerprint=Json{{"kind","completion"},{"player",identityFingerprint(request->player)},{"action",id(request->pending_action)},{"button",request->selected_button}}.dump();return self.cachedReply(request->request_id,std::move(fingerprint),std::move(bucket),generation,revision,reply,out,[&]{
             auto found=self.pending.find(id(request->pending_action));if(found==self.pending.end())return self.result(EC_REVOKED,"Pending action revoked or consumed");Session* actor=nullptr;auto verified=self.extract(request->player,actor);if(verified!=EC_OK||actor->actor.uuid()!=found->second.actorUuid){self.audit(EC_DENIED,actor,"core","form.complete",found->second.actorUuid);return self.result(EC_DENIED,"Form subject does not match authenticated player");}
@@ -439,7 +523,9 @@ struct Runtime::Impl {
             if(action.expires<=self.now()){auto receipt=self.rejectPending(action,EC_EXPIRED);self.capabilities.erase(id(action.request.meta.capability));return self.result(EC_EXPIRED,receipt.receipt.empty()?"Pending action expired":receipt.receipt,EC_NATIVE_REPLY_DEVELOPMENT_ONLY);}
             auto account=self.core->balance(action.actorUuid,asset(action.request.asset));if(account.status!=Status::Ok||account.revision!=action.accountRevision){auto receipt=self.rejectPending(action,EC_CONFLICT);self.capabilities.erase(id(action.request.meta.capability));return self.result(EC_CONFLICT,receipt.receipt.empty()?"Pending account revision changed":receipt.receipt,EC_NATIVE_REPLY_DEVELOPMENT_ONLY);}
             action.request.reason={action.reason.data(),static_cast<uint32_t>(action.reason.size()),0};auto result=self.mutate(action.request,true,verified);if(verified!=EC_OK&&result.receipt.empty())result=self.rejectPending(action,verified);self.capabilities.erase(id(action.request.meta.capability));return self.result(verified,result.receipt.empty()?"Diagnostic action rejected":result.receipt,EC_NATIVE_REPLY_DEVELOPMENT_ONLY);
-        });});}
+        });});
+#endif
+    }
     static EcStatus EC_CALL tick(EcNativeBridgeToken nonce,std::uint64_t)noexcept{return call([&](Impl& self)->EcStatus{auto code=self.bridge(nonce);if(code!=EC_OK)return code;if(self.noticePolled&&self.now()-self.lastNoticePoll<1000)return EC_OK;self.noticePolled=true;self.lastNoticePoll=self.now();self.purge();if(!self.host.publish_event)return EC_UNSUPPORTED;for(const auto& row:self.core->outboxFor("core.notice",100)){auto notice=dto<EcPhase2OutboxNotice>();notice.event_cursor=static_cast<uint64_t>(row.id);notice.instance_epoch=self.epoch;const std::string topic=EC_PHASE2_OUTBOX_TOPIC;EmEvent event{sizeof(event),1,{topic.data(),static_cast<uint32_t>(topic.size()),0},&notice,sizeof(notice),1,0};auto sent=self.host.publish_event(self.host.instance,&event);
             // Publishing is not an acknowledgement or delivery guarantee.
             auto retry=std::min<int64_t>(60000,INT64_C(1000)<<std::min<std::uint64_t>(row.retryCount,6));auto saved=self.core->recordOutboxAttempt("core.notice",row.id,sent==EM_OK?"Published advisory notice; consumer acknowledgement pending":"Host event publication failed",retry);if(saved!=Status::Ok)return status(saved);}

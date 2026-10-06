@@ -1,0 +1,25 @@
+{
+  "classifications": ["UNIT", "DOMAIN", "SYNTHETIC_INTEGRATION", "REAL_DLL", "REAL_BDS", "CLOUD_CI", "REAL_CLIENT"],
+  "suites": {
+    "SDKLayoutChecks": "UNIT",
+    "SDKCppTests": "UNIT",
+    "Phase2ClientContracts": "UNIT",
+    "EternalExampleContracts": "UNIT",
+    "CoreApiTests": "UNIT",
+    "SourceBoundaryChecks": "UNIT",
+    "PublicTreeAudit": "UNIT",
+    "CoreDomainTests": "DOMAIN",
+    "Phase2DomainTests": "DOMAIN",
+    "Phase2RuntimeTests": "SYNTHETIC_INTEGRATION",
+    "ProductionRuntimeIsolationTests": "SYNTHETIC_INTEGRATION",
+    "HostRuntimeTests": "SYNTHETIC_INTEGRATION",
+    "Phase2NativeBridgeTests": "SYNTHETIC_INTEGRATION",
+    "ConfigTests": "SYNTHETIC_INTEGRATION",
+    "SyntheticMultiUserTests": "SYNTHETIC_INTEGRATION",
+    "ModuleArtifactTests": "REAL_DLL",
+    "ValidationModuleTests": "REAL_DLL",
+    "ConsumerModuleTests": "REAL_DLL",
+    "ProductionIsolationTests": "REAL_DLL",
+    "ProductionArtifactScan": "REAL_DLL"
+  }
+}

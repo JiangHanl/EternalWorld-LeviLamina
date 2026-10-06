@@ -1,6 +1,8 @@
 # 公共 API
 
-EternalSDK 提供 C ABI 和 C++ 辅助接口。真实导出与结构定义以 sdk/EternalSDK 的公共头为准；sdk/EternalSDK/include 提供标准 EternalSDK include 路径的转发头。模块内部 Core.hpp 不是第三方业务 API。Phase 2 新增独立 Core 1.2 服务，详见 [Phase 2 契约](docs/PHASE2_API.md)。原 96 字节 API 1.0、Module ABI 1.0 与完整 Core 1.1 前缀保持不变。正式资产能力仍关闭，不能继承 Phase 1.5 的玩家验收结论。
+EternalSDK 提供 C ABI 和 C++ 辅助接口。真实导出与结构定义以 sdk/EternalSDK 的公共头为准；sdk/EternalSDK/include 提供标准 EternalSDK include 路径的转发头。模块内部 Core.hpp 不是第三方业务 API。Phase 2 的独立 Core 1.3 服务为 296 字节，详见 [Phase 2 契约](docs/PHASE2_API.md)。原 96 字节 API 1.0、Module ABI 1.0、240 字节 Core 1.1 与 264 字节 1.2 前缀保持不变。正式资产能力仍关闭，不能继承 Phase 1.5 的玩家验收结论。
+
+1.3 追加后台消费者登记、查询、ACK、retry，走真实模块 CallerContext 与 Core 批准的 Events / Audit 权限。事件和 delivery token 绑定当前消费者、模块代次、Core 实例；不能依据猜测 eventId 确认其他消费者的记录。消费者只操作自己的去重与投影数据，先提交副作用，再 ACK。重复、离线、乱序与崩溃重放是正式 SDK 契约，Host 通知本身不是 ACK。
 
 | 层 | 接口用途 | 安全边界 |
 |---|---|---|

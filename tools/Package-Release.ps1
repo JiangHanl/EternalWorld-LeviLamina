@@ -57,6 +57,7 @@ foreach ($license in Get-ChildItem -LiteralPath (Join-Path $projectRoot 'third_p
 foreach ($name in @('EternalCore','EternalCommerce','EternalLife','EternalWorld','EternalContent','EternalManagement','EternalPresentation','EternalEncounters')) {
     $files += @{source=('bin/Eternal/modules/'+$name+'.dll');entry=('Eternal/modules/'+$name+'.dll')}
 }
+if (@($files | Where-Object { $_.entry.EndsWith('.dll') }).Count -ne 9 -or $files.Count -ne 40) { throw 'Production package must remain exactly 9 DLLs / 40 files' }
 foreach ($file in $files) {
     $path = Join-Path $projectRoot $file.source
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Release input missing: $($file.source)" }
@@ -80,7 +81,15 @@ try {
         try { $sourceStream.CopyTo($entryStream) } finally { $entryStream.Dispose(); $sourceStream.Dispose() }
     }
 } finally { $archive.Dispose(); $archiveStream.Dispose() }
+$archive = [IO.Compression.ZipFile]::OpenRead($archivePath)
+try {
+    if ($archive.Entries.Count -ne $files.Count) { throw 'Production ZIP entry count changed' }
+    $names = @($archive.Entries.FullName)
+    if (@($names | Where-Object { $_ -notlike 'Eternal/*' -or $_ -match '(?i)(?:validation|testconsumer|corevalidation|(?:^|/)(?:data|logs|worlds|private|artifacts)/|\.(?:pdb|db|log)$)' }).Count) { throw 'Non-production content leaked into the release ZIP' }
+    if (@($names | Where-Object { $_.EndsWith('.dll') }).Count -ne 9) { throw 'Production ZIP DLL count changed' }
+} finally { $archive.Dispose() }
 $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 ($hash+'  '+[IO.Path]::GetFileName($archivePath)) | Set-Content -LiteralPath ($archivePath+'.sha256') -Encoding ascii
 Write-Output ('Package: '+$archivePath)
 Write-Output ('SHA256: '+$hash)
+Write-Output 'PASS production ZIP allowlist: 40 files / 9 DLLs; no validation binaries, private data or logs'

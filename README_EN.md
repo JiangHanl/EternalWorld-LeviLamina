@@ -4,7 +4,7 @@
 
 A native C++ server project for Minecraft Bedrock Dedicated Server and LeviLamina. The target architecture has one thin loader, **EternalHost**, eight internal native modules, and an EternalSDK exposing a versioned C ABI with C++ helpers. Only the Host integrates with the engine; modules own separate business responsibilities and communicate through published interfaces.
 
-Phase 1.5 engineering acceptance is complete; its [Windows CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) and real BDS records are preserved. Phase 2 now implements authenticated identity, permissions, capabilities, Money/Reputation, durable rejection receipts and audit. See the [separate report](docs/PHASE2_TEST_REPORT.md) for verified scope. Production asset feature bits remain zero; seven business modules remain PLANNED and disabled. Complete survival gameplay has not been delivered.
+Phase 1.5 engineering acceptance is complete; its [Windows CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) and real BDS records are preserved. Phase 2 is completing automated acceptance for identity, permissions, capabilities, Money/Reputation, durable receipts, audit and public consumer APIs. See the [separate report](docs/PHASE2_TEST_REPORT.md). Production asset feature bits remain zero; seven business modules remain PLANNED and disabled. Complete survival gameplay has not been delivered. [Seven test categories](TESTING.md) separate daily automation from [pre-release client gates](PRE_RELEASE_CHECKLIST.md); deferred client checks do not block a sufficiently verified development Phase.
 
 The Phase 2 SDK 1.2 [cloud CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119) passed 12 executable suites, 152 counted groups and dual-language layout checks. Both artifacts were downloaded and hash-verified; cloud DLLs passed two real BDS lifecycle runs. Authenticated-player identity, permission and asset acceptance is recorded separately and cannot be replaced by CI.
 
@@ -45,7 +45,7 @@ Core provides Phase 2 infrastructure and development acceptance entry points; pr
 
 ## SDK and development
 
-DLL boundaries use a Stable C ABI; development uses modern C++ EternalSDK. Module ABI 1.0, legacy Core API 1.0 and the independent Core API 1.2 are versioned separately, retaining the complete 1.1 prefix. Structures carry size and version; capabilities are queried explicitly. No STL objects, exceptions or SQLite handles cross this boundary. Allocators own corresponding deallocation. Use Service Registry for synchronous calls and EventBus for broadcasts, never another module's private source or database.
+DLL boundaries use a Stable C ABI; development uses modern C++ EternalSDK. Module ABI 1.0, legacy Core API 1.0 and independent Core API 1.3 are versioned separately, retaining complete 1.1/1.2 prefixes. Structures carry size and version; capabilities are queried explicitly. No STL objects, exceptions or SQLite handles cross this boundary. Allocators own corresponding deallocation. Use Service Registry for synchronous calls and EventBus for broadcasts, never another module's private source or database.
 
 Start with the [template](templates/EternalModule/README.md), [SDK](sdk/EternalSDK/README.md), [MODULE_DEVELOPMENT](MODULE_DEVELOPMENT.md) and Example Module. Extend an existing domain first; add a DLL target only for a distinct business domain.
 

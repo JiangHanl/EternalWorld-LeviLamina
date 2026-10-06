@@ -23,6 +23,17 @@ class Phase2Client final {
         request.meta.struct_size=sizeof(Request);request.meta.struct_version=EC_PHASE2_STRUCT_VERSION;
         request.meta.caller_context=api_->caller_context;return EC_OK;
     }
+    template<class Request> EcStatus prepareConsumer(Request& request)const noexcept {
+        if(!api_)return EC_NOT_READY;
+        auto info=output<EcPhase2FeatureInfo>();auto status=api_->get_phase2_features(&info);if(status!=EC_OK)return status;
+        if(info.struct_size!=sizeof(info)||info.struct_version!=EC_PHASE2_STRUCT_VERSION||info.instance_epoch!=api_->instance_epoch||info.reserved[0]||info.reserved[1])return EC_ABI_MISMATCH;
+        if(info.lifecycle!=EC_LIFECYCLE_READY)return EC_NOT_READY;
+        auto feature=EC_P2_FEATURE_OUTBOX_CONSUMERS;
+        if((info.enabled&feature)!=feature&&(!developmentValidation_||(info.development_only&feature)!=feature))return EC_UNSUPPORTED;
+        if(!nonzero(api_->caller_context)||!api_->caller_generation||!api_->instance_epoch)return EC_NOT_READY;
+        if(nonzero(request.caller_context)&&!equal(request.caller_context,api_->caller_context))return EC_DENIED;
+        request.struct_size=sizeof(request);request.struct_version=EC_PHASE2_STRUCT_VERSION;request.caller_context=api_->caller_context;return EC_OK;
+    }
 public:
     Phase2Client()=default;
     static EmStatus discover(const EmHostContext& host,uint64_t requestedCaps,Phase2Client& out)noexcept {
@@ -32,10 +43,10 @@ public:
         auto reference=output<EmServiceReference>();auto status=host.query_service(host.instance,&request,&reference);if(status!=EM_OK)return status;
         if(reference.struct_size!=sizeof(reference)||reference.struct_version!=EM_STRUCT_VERSION||reference.reserved||!reference.table||reference.table_size<sizeof(EternalCorePhase2Api)||reference.api_major!=EC_PHASE2_API_MAJOR||reference.api_minor<EC_PHASE2_API_MINOR)return EM_ABI_MISMATCH;
         const auto* api=static_cast<const EternalCorePhase2Api*>(reference.table);
-        if(api->struct_size<EC_PHASE2_API_V1_2_SIZE||api->struct_size>reference.table_size||api->struct_version!=EC_PHASE2_STRUCT_VERSION||api->api_major!=EC_PHASE2_API_MAJOR||api->api_minor<EC_PHASE2_API_MINOR||
+        if(api->struct_size<EC_PHASE2_API_V1_3_SIZE||api->struct_size>reference.table_size||api->struct_version!=EC_PHASE2_STRUCT_VERSION||api->api_major!=EC_PHASE2_API_MAJOR||api->api_minor<EC_PHASE2_API_MINOR||
            api->v1_0.struct_size!=sizeof(EternalCoreApi)||api->v1_0.api_major!=EC_API_MAJOR||api->v1_0.api_minor!=EC_API_MINOR||api->v1_0.reserved0||
            !api->v1_0.get_version||!api->v1_0.get_features||!api->v1_0.read_identity||!api->v1_0.read_coin||!api->v1_0.submit_transfer||!api->v1_0.poll_receipt||
-           !api->get_phase2_features||!api->read_identity_v2||!api->read_roles||!api->check_permission||!api->read_asset||!api->submit_mutation||!api->poll_receipt_v2||!api->read_outbox||!api->register_command_route||!api->unregister_command_route||!api->authorize_invocation)return EM_ABI_MISMATCH;
+           !api->get_phase2_features||!api->read_identity_v2||!api->read_roles||!api->check_permission||!api->read_asset||!api->submit_mutation||!api->poll_receipt_v2||!api->read_outbox||!api->register_command_route||!api->unregister_command_route||!api->authorize_invocation||!api->register_consumer||!api->query_consumer||!api->ack_consumer_event||!api->retry_consumer_event)return EM_ABI_MISMATCH;
         for(auto reserved:api->reserved)if(reserved)return EM_ABI_MISMATCH;
         for(auto reserved:api->v1_0.reserved)if(reserved)return EM_ABI_MISMATCH;
         out.api_=api;return EM_OK;
@@ -62,6 +73,21 @@ public:
         if(nonzero(request.caller_context)&&!equal(request.caller_context,api_->caller_context))return EC_DENIED;
         request.struct_size=sizeof(request);request.struct_version=EC_PHASE2_STRUCT_VERSION;request.caller_context=api_->caller_context;
         out=output<EcPhase2InvocationGrant>();return api_->authorize_invocation(&request,&out);
+    }
+    EcStatus registerConsumer(EcPhase2ConsumerRegistrationRequest request,EcPhase2ConsumerRegistration& out)const noexcept {
+        auto status=prepareConsumer(request);if(status!=EC_OK)return status;
+        out=output<EcPhase2ConsumerRegistration>();return api_->register_consumer(&request,&out);
+    }
+    EcStatus queryConsumer(EcPhase2ConsumerQueryRequest request,EcPhase2ConsumerBuffer& out)const noexcept {
+        auto status=prepareConsumer(request);if(status!=EC_OK)return status;
+        out.struct_size=sizeof(out);out.struct_version=EC_PHASE2_STRUCT_VERSION;out.count=out.required=out.reserved0=0;out.last_event_id=out.reserved1=0;
+        return api_->query_consumer(&request,&out);
+    }
+    EcStatus acknowledgeConsumer(EcPhase2ConsumerEventRequest request)const noexcept {
+        auto status=prepareConsumer(request);if(status!=EC_OK)return status;return api_->ack_consumer_event(&request);
+    }
+    EcStatus retryConsumer(EcPhase2ConsumerRetryRequest request)const noexcept {
+        auto status=prepareConsumer(request);if(status!=EC_OK)return status;return api_->retry_consumer_event(&request);
     }
     EcStatus identity(EcPhase2QueryRequest request,EcPhase2IdentitySnapshot& out,EcUtf8Buffer& name)const noexcept {
         auto status=prepare(request,EC_P2_FEATURE_IDENTITY);if(status!=EC_OK)return status;

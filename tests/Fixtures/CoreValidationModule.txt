@@ -1,17 +1,19 @@
 CoreValidationModule is a temporary public-SDK validation fixture, not a game module.
-It requires EternalHost module ABI 1.0 and EternalCore public Phase2 API 1.2.
+It requires EternalHost module ABI 1.0 and EternalCore public Phase2 API 1.3.
 Its module ID is core-validation. It declares Core capabilities but receives no authority from that declaration.
 The check route supports authenticated identity, roles, permission, money/reputation reads, one fixed money addition, receipt and outbox queries. It cannot modify roles.
 The fixed addition is 100 minor units (1 liang), with reason sdk-route-test.
-Production feature bits remain zero. Asset validation requires explicit Core development configuration and Core-issued authorization.
+Production feature bits remain zero. Asset validation requires the separately compiled EternalCoreValidation.dll, explicit isolated configuration and Core-issued authorization.
 The command argument is exactly 32 lowercase hexadecimal characters, nonzero: an idempotency key, never an identity or permission claim.
-Temporary installation: copy CoreValidationModule.dll to Eternal/modules and append an enabled core-validation module entry in the Host module configuration.
+Temporary installation ONLY in a separate disposable validation server: use EternalCoreValidation.dll as modules/EternalCore.dll and copy CoreValidationModule.dll to Eternal/modules, then append an enabled core-validation entry. Never install both Core variants at once or replace a production Core in a live server.
 In the isolated Core private configuration, explicitly enable developmentValidation and allow core-validation the six public Core module capability names. The client opt-in is not authorization.
 From a genuinely authenticated player with money-adjust permission, invoke:
 /ecore native invoke core-validation check abcdefabcdefabcdefabcdefabcdefab
 The reply contains aggregate roles, permission, balances, receipt state/revision and the first authorized outbox page; no identity, capability or caller token is printed.
 Repeat the same argument: submissionReplayed must be true and money must not increase again. Repeat after restart to verify persistent idempotency.
-Default developmentValidation=false still permits route registration but rejects the asset-validation path; production feature bits remain zero.
+Default developmentValidation=false still permits route registration but rejects asset validation. A production Core refuses developmentValidation=true and validatedAssets=true; changing JSON cannot enable test paths.
 Use only in an isolated validation server, then disable the module and remove its configuration and DLL.
-This fixture is excluded from EternalWorld release ZIPs and distributed in a separate validation artifact.
+All three validation DLLs are excluded from EternalWorld release ZIPs and distributed in a separate validation artifact. EternalTestConsumer uses only the SDK/Registry/EventBus and its own effect/dedup SQLite, not Core storage.
 The local/CI ValidationModuleTests suite uses the actual Host/Core/fixture DLLs, but does not authenticate a player or validate real asset mutations.
+ConsumerModuleTests uses actual DLLs plus synthetic identities and tests consumer ACK, retry, offline replay, ordering and real child-process crash recovery. It is REAL_DLL, never REAL_CLIENT.
+Daily tests are automated. Do not require manual player commands to complete a development Phase; REAL_CLIENT scenarios are deferred until the pre-release checklist.

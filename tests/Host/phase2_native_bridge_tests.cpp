@@ -31,7 +31,7 @@ std::vector<std::string> boundNames, trace;
 EcNativeIngressApi native{};
 EternalCorePhase2Api discovery{};
 std::filesystem::path folder;
-bool publishIngress{}, malformedBinding{}, denyBinding{}, wrongGeneration{}, missingRouteEntry{};
+bool publishIngress{}, malformedBinding{}, denyBinding{}, wrongGeneration{}, missingRouteEntry{}, missingConsumerEntry{};
 uint32_t publishedMinor{}, returnedMinor{}, returnedSize{};
 uint64_t epoch{}, serial{};
 int groupCount{}, bindCalls{}, revokeCalls{};
@@ -72,6 +72,10 @@ EcStatus EC_CALL authorizeInvocation(const EcPhase2InvocationAuthorization*,
                                       EcPhase2InvocationGrant*) noexcept {
     return EC_UNSUPPORTED; // Core authority is covered by its own Runtime tests.
 }
+EcStatus EC_CALL registerConsumer(const EcPhase2ConsumerRegistrationRequest*, EcPhase2ConsumerRegistration*) noexcept { return EC_UNSUPPORTED; }
+EcStatus EC_CALL queryConsumer(const EcPhase2ConsumerQueryRequest*, EcPhase2ConsumerBuffer*) noexcept { return EC_UNSUPPORTED; }
+EcStatus EC_CALL ackConsumer(const EcPhase2ConsumerEventRequest*) noexcept { return EC_UNSUPPORTED; }
+EcStatus EC_CALL retryConsumer(const EcPhase2ConsumerRetryRequest*) noexcept { return EC_UNSUPPORTED; }
 EcStatus EC_CALL bindModule(EcNativeBridgeToken token, const EcNativeModuleBindingRequest *request,
                             EcNativeModuleBindingResult *out) noexcept {
     if (!equal(token, native.bridge_nonce) || !request || !out)
@@ -100,6 +104,8 @@ EcStatus EC_CALL bindModule(EcNativeBridgeToken token, const EcNativeModuleBindi
     b.api.read_asset = readAsset;
     if (missingRouteEntry)
         b.api.authorize_invocation = nullptr;
+    if (missingConsumerEntry)
+        b.api.ack_consumer_event = nullptr;
     *out = {sizeof(*out),
             EC_NATIVE_INGRESS_STRUCT_VERSION,
             &b.api,
@@ -147,7 +153,7 @@ void reset() {
     serial = 0;
     epoch = 0;
     publishIngress = true;
-    malformedBinding = denyBinding = wrongGeneration = missingRouteEntry = false;
+    malformedBinding = denyBinding = wrongGeneration = missingRouteEntry = missingConsumerEntry = false;
     publishedMinor = returnedMinor = EC_PHASE2_API_MINOR;
     returnedSize = sizeof(EternalCorePhase2Api);
     discovery = {};
@@ -160,6 +166,10 @@ void reset() {
     discovery.register_command_route = registerRoute;
     discovery.unregister_command_route = unregisterRoute;
     discovery.authorize_invocation = authorizeInvocation;
+    discovery.register_consumer = registerConsumer;
+    discovery.query_consumer = queryConsumer;
+    discovery.ack_consumer_event = ackConsumer;
+    discovery.retry_consumer_event = retryConsumer;
     native = {};
     native.struct_size = sizeof(native);
     native.struct_version = EC_NATIVE_INGRESS_STRUCT_VERSION;
@@ -440,6 +450,28 @@ int main() {
             q.minimum_minor = 2;
             require(query(1, q, r) == EM_ABI_MISMATCH && !r.table && bindCalls == 1,
                     "Cached 1.1 scope escaped newer-version validation");
+        });
+        test("legacy 1.2 prefix remains queryable and cannot satisfy a 1.3 consumer request", [] {
+            publishedMinor = returnedMinor = 2;
+            returnedSize = EC_PHASE2_API_V1_2_SIZE;
+            discovery.api_minor = 2;
+            discovery.struct_size = returnedSize;
+            auto host = started();
+            auto q = request(EC_PHASE2_SERVICE_ID);
+            q.minimum_minor = 2;
+            auto r = reference();
+            require(query(1, q, r) == EM_OK && r.api_minor == 2 && r.table_size == EC_PHASE2_API_V1_2_SIZE,
+                    "Compatible 1.2 prefix rejected");
+            q.minimum_minor = 3;
+            require(query(1, q, r) == EM_ABI_MISMATCH && !r.table && bindCalls == 1,
+                    "Legacy provider satisfied 1.3 or minted another binding");
+        });
+        test("1.3 scoped table rejects a missing consumer entry and revokes its token", [] {
+            missingConsumerEntry = true;
+            auto host = started();
+            auto r = reference();
+            require(query(1, request(EC_PHASE2_SERVICE_ID), r) == EM_ABI_MISMATCH && !r.table && revokeCalls == 1,
+                    "Missing consumer ACK entry returned usable scope");
         });
         test("1.2 scoped table requires complete append-only route entries", [] {
             returnedSize = EC_PHASE2_API_V1_1_SIZE;

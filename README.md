@@ -4,7 +4,7 @@
 
 以 Minecraft Bedrock Dedicated Server 与 LeviLamina 为运行环境的原生 C++ 服务器工程。目标架构是一个薄加载插件 **EternalHost**、八个内部原生模块，以及面向开发者的 EternalSDK C/C++ 接口。Host 接触引擎；模块按业务职责拆分，通过版本化接口协作。
 
-Phase 1.5 工程化验收已完成，原 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 和真实 BDS 记录保留。Phase 2 正在接入认证身份、权限、Capability、Money/Reputation、拒绝回执与审计；具体已验证范围见 [独立报告](docs/PHASE2_TEST_REPORT.md)。正式资产 feature bits 保持 0，七个业务模块仍为 PLANNED 并默认禁用；完整生存玩法尚未交付。
+Phase 1.5 工程化验收已完成，原 [Windows 云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37199429155) 和真实 BDS 记录保留。Phase 2 正在完成自动化收尾：身份、权限、Capability、Money/Reputation、拒绝回执、审计与正式消费者接口；具体范围见 [独立报告](docs/PHASE2_TEST_REPORT.md)。正式资产 feature bits 保持 0，七个业务模块仍为 PLANNED 并默认禁用；完整生存玩法尚未交付。日常开发采用 [七类测试](TESTING.md)，人工客户端缺项集中 [开服前验收](PRE_RELEASE_CHECKLIST.md)，不阻塞内部验证充分的 Phase。
 
 Phase 2 SDK 1.2 的 [云 CI](https://github.com/JiangHanl/EternalWorld-LeviLamina/actions/runs/37217978119) 已通过，12 套测试、152 组计数用例及双语言布局检查通过。云 Artifact 已实际下载核验，云 DLL 完成两轮真实 BDS 启停回归；真实玩家身份、权限与资产验收单独记录，不能由 CI 替代。
 
@@ -48,7 +48,7 @@ Core 当前提供 Phase 2 基础设施及开发验收入口，生产资产 API �
 
 ## SDK 与开发
 
-跨 DLL 使用 Stable C ABI，开发层提供 Modern C++ EternalSDK。Module ABI 1.0、旧 Core API 1.0 和独立 Core API 1.2 分别版本化；新表保留完整 1.1 前缀，结构携带版本与大小，能力须显式查询。边界不传递 STL 对象、异常或 SQLite 句柄，分配方负责释放。同步通信走 Service Registry，广播走 EventBus；禁止读取其他模块私有源码或数据库。
+跨 DLL 使用 Stable C ABI，开发层提供 Modern C++ EternalSDK。Module ABI 1.0、旧 Core API 1.0 和独立 Core API 1.3 分别版本化；新表保留完整 1.1 / 1.2 前缀，结构携带版本与大小，能力须显式查询。边界不传递 STL 对象、异常或 SQLite 句柄，分配方负责释放。同步通信走 Service Registry，广播走 EventBus；禁止读取其他模块私有源码或数据库。
 
 新模块从 [标准模板](templates/EternalModule/README.md) 开始，只需阅读 [SDK](sdk/EternalSDK/README.md)、[MODULE_DEVELOPMENT](MODULE_DEVELOPMENT.md) 和 Example Module。优先扩展已有业务域，形成独立业务域才增加 DLL target。
 

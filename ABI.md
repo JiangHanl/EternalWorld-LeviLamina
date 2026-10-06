@@ -34,4 +34,6 @@ Unload 后不得使用已复制的上下文字段或 instance 调用 Host。当�
 
 验证分为 C11 与 C++20 头/布局编译、真实 DLL 导出和调用、版本/结构大小错误测试、停用/卸载和完整 BDS 重启。任一层通过都不能代替其他层。便携 MinGW 只用于无 LL 的域/契约测试，不用于最终 LL Host DLL。
 
-Phase 2 保留上述旧布局，独立 Core API 1.2 为 264 字节表，前 240 字节保留完整 1.1 契约。新增路由与 Invocation 仍使用 POD、size/version 和 Core 专属不透明票据；尾部扩展不改变 ABI major。128 字节 native ingress 属于 Host 私有协议，模块查询路径禁止访问；公开模块从真实调用路由取得授权，不能直接伪造身份。详见 [契约](docs/PHASE2_API.md) 和权威 [头文件](sdk/EternalSDK/Core/phase2_abi.h)。合成测试专属的私有 C++ hooks 不在 SDK、运行配置、正式 DLL 或服务表中。
+Phase 2 保留上述旧布局，独立 Core API 1.3 为 296 字节表，前 240 / 264 字节保留完整 1.1 / 1.2 契约。新增路由、Invocation 和消费者仍使用 POD、size/version 和 Core 专属不透明票据；尾部追加四个 consumer 函数，不改变 ABI major。Host 分别检查请求 minor 所需最小长度、provider 实际 minor 和完整函数指针尾部，旧 provider 不能满足新 consumer 请求。128 字节 native ingress 属于 Host 私有协议，模块查询路径禁止访问；公开模块从真实调用路由取得授权，不能直接伪造身份。详见 [契约](docs/PHASE2_API.md) 和权威 [头文件](sdk/EternalSDK/Core/phase2_abi.h)。合成测试专属的私有 C++ hooks 不在 SDK、运行配置、正式 DLL 或服务表中。
+
+验证变体通过 ETERNAL_CORE_VALIDATION_BUILD 编译隔离，测试 Runtime hooks 则另用 ETERNAL_CORE_RUNTIME_TESTING，后者禁止进入任何模块 DLL。正式 Core 无验证 marker / 消费者测试控制导出，配置不能开启验证入口。测试工具通过独立 Artifact 分发；正式 ZIP 的实际二进制及内容扫描是发布门槛。

@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
         require(selfcheck(&features, &readStatus, &registered) == EM_OK
             && features.enabled == 0 && registered == 1 && readStatus == EC_UNSUPPORTED,
             "Actual scoped route/default production feature boundary failed");
-        std::cout << "PASS actual Core+Host+fixture scoped API 1.2 route; production features 0/Unsupported\n";
+        std::cout << "PASS actual Core+Host+fixture scoped API 1.3 route; production features 0/Unsupported\n";
         if (!host.disable(error)) throw std::runtime_error(error);
         require(selfcheck(&features, &readStatus, &registered) == EM_NOT_READY,
             "Disabled fixture still exposes active client/route state");

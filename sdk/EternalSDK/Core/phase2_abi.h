@@ -3,7 +3,7 @@
 
 #include "core_abi.h"
 
-/* Independent 1.2 service; the complete 1.1 prefix is unchanged. Never replace or extend the stored 1.0 table in
+/* Independent 1.3 service; the complete 1.1/1.2 prefixes are unchanged. Never replace or extend the stored 1.0 table in
  * place. Its complete 96-byte prefix and all original DTO layouts remain fixed.
  * Caller/context/capability values are Core-issued opaque, unpredictable IDs.
  * No public function issues trusted player identity, module scope or Owner.
@@ -14,10 +14,11 @@
  */
 #define EC_PHASE2_SERVICE_ID "EternalCore.Phase2Api"
 #define EC_PHASE2_API_MAJOR UINT32_C(1)
-#define EC_PHASE2_API_MINOR UINT32_C(2)
+#define EC_PHASE2_API_MINOR UINT32_C(3)
 #define EC_PHASE2_STRUCT_VERSION UINT32_C(1)
 #define EC_PHASE2_API_V1_1_SIZE UINT32_C(240)
 #define EC_PHASE2_API_V1_2_SIZE UINT32_C(264)
+#define EC_PHASE2_API_V1_3_SIZE UINT32_C(296)
 #define EC_PHASE2_PRODUCTION_FEATURES UINT64_C(0)
 #define EC_PHASE2_OUTBOX_TOPIC "core.outbox.changed"
 #define EC_PHASE2_MAX_NAME_UTF8_BYTES UINT32_C(128)
@@ -30,7 +31,8 @@
 #define EC_P2_FEATURE_ASSET_MUTATION (UINT64_C(1)<<4)
 #define EC_P2_FEATURE_RECEIPTS (UINT64_C(1)<<5)
 #define EC_P2_FEATURE_OUTBOX (UINT64_C(1)<<6)
-#define EC_P2_FEATURE_ALL UINT64_C(127)
+#define EC_P2_FEATURE_OUTBOX_CONSUMERS (UINT64_C(1)<<7)
+#define EC_P2_FEATURE_ALL UINT64_C(255)
 
 #define EC_P2_ROLE_BUILD (UINT64_C(1)<<0)
 #define EC_P2_ROLE_ECONOMY (UINT64_C(1)<<1)
@@ -90,6 +92,8 @@ typedef EcId128 EcCallerContext;
 typedef EcId128 EcPlayerId;
 typedef EcId128 EcRequestId;
 typedef EcId128 EcInvocationToken;
+typedef EcId128 EcConsumerHandle;
+typedef EcId128 EcDeliveryToken;
 #define EC_P2_INVOCATION_DEVELOPMENT_ONLY UINT32_C(1)
 #define EC_P2_CAPABILITY_DEVELOPMENT_ONLY UINT32_C(1)
 
@@ -298,8 +302,9 @@ typedef struct EcPhase2OutboxBuffer {
 
 /* Host's general EventBus is not an authorization boundary. Only this minimal
  * notification may be broadcast. Never publish full identities/balances/tokens
- * in it. Authorized consumers obtain current rows through read_outbox. No public
- * acknowledgement method exists; only Core's trusted projection worker may ack.
+ * in it. Authorized consumers query their own pending rows. Publication is never
+ * an implicit acknowledgement. Since API 1.3 an
+ * operator-approved module consumer may ACK only its Core-issued delivery token.
  */
 typedef struct EcPhase2OutboxNotice {
     uint32_t struct_size;
@@ -381,6 +386,69 @@ typedef struct EcPhase2InvocationGrant {
 typedef EcStatus (EC_CALL *EcRegisterCommandRouteFn)(const EcPhase2CommandRouteRequest*) EC_NOEXCEPT;
 typedef EcStatus (EC_CALL *EcUnregisterCommandRouteFn)(const EcPhase2RouteRemovalRequest*) EC_NOEXCEPT;
 typedef EcStatus (EC_CALL *EcAuthorizeInvocationFn)(const EcPhase2InvocationAuthorization*,EcPhase2InvocationGrant*) EC_NOEXCEPT;
+
+/* Background consumers use an operator-approved module scope, never a claimed
+ * player/OP. Core requires both Events and Audit capabilities and binds names
+ * internally to the actual module. Consumer/delivery handles are ephemeral;
+ * persist only the local consumer key and event IDs used by your own dedup DB.
+ * Commit the consumer's effect and dedup record atomically BEFORE ACK. Host
+ * notifications are advisory cursor hints, not proof of delivery or an ACK. */
+typedef struct EcPhase2ConsumerRegistrationRequest {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcUtf8View local_key; /* Lowercase ASCII letters/digits/_/-; 1..32 bytes. */
+    uint64_t reserved;
+} EcPhase2ConsumerRegistrationRequest;
+typedef struct EcPhase2ConsumerRegistration {
+    uint32_t struct_size,struct_version;
+    EcConsumerHandle consumer;
+    uint64_t caller_generation,instance_epoch;
+    uint64_t reserved[2];
+} EcPhase2ConsumerRegistration;
+typedef struct EcPhase2ConsumerQueryRequest {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcConsumerHandle consumer;
+    uint32_t limit,reserved0; /* 1..100; only pending/retry-due events, ID order. */
+    uint64_t reserved1;
+} EcPhase2ConsumerQueryRequest;
+enum {EC_P2_DELIVERY_PENDING=1,EC_P2_DELIVERY_RETRY=2,EC_P2_DELIVERY_OFFLINE=3};
+typedef struct EcPhase2ConsumerEvent {
+    EcPhase2OutboxEvent event; /* Original event identity + current Core projection. */
+    EcDeliveryToken delivery; /* Core-issued, bound to this consumer/event/generation. */
+    uint64_t retry_count,next_attempt_at_unix_ms;
+    uint32_t delivery_state,reserved;
+} EcPhase2ConsumerEvent;
+typedef struct EcPhase2ConsumerBuffer {
+    uint32_t struct_size,struct_version;
+    EcPhase2ConsumerEvent* data; /* Caller-owned; capacity must be <=100. */
+    uint32_t capacity,count,required,reserved0;
+    uint64_t last_event_id,reserved1;
+} EcPhase2ConsumerBuffer;
+typedef struct EcPhase2ConsumerEventRequest {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcConsumerHandle consumer;
+    EcDeliveryToken delivery;
+    uint64_t event_id;
+    EcRequestId request_id; /* Nonzero diagnostic attribution; ACK is idempotent. */
+    uint64_t reserved;
+} EcPhase2ConsumerEventRequest;
+typedef struct EcPhase2ConsumerRetryRequest {
+    uint32_t struct_size,struct_version;
+    EcCallerContext caller_context;
+    EcConsumerHandle consumer;
+    EcDeliveryToken delivery;
+    uint64_t event_id;
+    EcRequestId request_id;
+    uint64_t delay_ms; /* 0..86400000; persisted wall-clock schedule. */
+    EcUtf8View error; /* Required UTF-8 1..512 bytes, no NUL/controls. */
+    uint64_t reserved[2];
+} EcPhase2ConsumerRetryRequest;
+typedef EcStatus (EC_CALL *EcRegisterConsumerFn)(const EcPhase2ConsumerRegistrationRequest*,EcPhase2ConsumerRegistration*) EC_NOEXCEPT;
+typedef EcStatus (EC_CALL *EcQueryConsumerFn)(const EcPhase2ConsumerQueryRequest*,EcPhase2ConsumerBuffer*) EC_NOEXCEPT;
+typedef EcStatus (EC_CALL *EcAckConsumerEventFn)(const EcPhase2ConsumerEventRequest*) EC_NOEXCEPT;
+typedef EcStatus (EC_CALL *EcRetryConsumerEventFn)(const EcPhase2ConsumerRetryRequest*) EC_NOEXCEPT;
 typedef struct EternalCorePhase2ApiV1_1 {
     EternalCoreApi v1_0; /* Unmodified 96-byte legacy table, including features=0. */
     uint32_t struct_size;
@@ -400,6 +468,29 @@ typedef struct EternalCorePhase2ApiV1_1 {
     EcReadPhase2OutboxFn read_outbox;
     uint64_t reserved[4];
 } EternalCorePhase2ApiV1_1;
+
+typedef struct EternalCorePhase2ApiV1_2 {
+    EternalCoreApi v1_0; /* Unmodified 96-byte legacy table, including features=0. */
+    uint32_t struct_size;
+    uint32_t struct_version;
+    uint32_t api_major;
+    uint32_t api_minor;
+    EcCallerContext caller_context; /* Zero on unbound discovery/diagnostic table. */
+    uint64_t caller_generation;
+    uint64_t instance_epoch;
+    EcGetPhase2FeaturesFn get_phase2_features;
+    EcReadPhase2IdentityFn read_identity_v2;
+    EcReadPhase2RolesFn read_roles;
+    EcCheckPhase2PermissionFn check_permission;
+    EcReadPhase2AssetFn read_asset;
+    EcSubmitPhase2MutationFn submit_mutation;
+    EcPollPhase2ReceiptFn poll_receipt_v2;
+    EcReadPhase2OutboxFn read_outbox;
+    uint64_t reserved[4];
+    EcRegisterCommandRouteFn register_command_route;
+    EcUnregisterCommandRouteFn unregister_command_route;
+    EcAuthorizeInvocationFn authorize_invocation;
+} EternalCorePhase2ApiV1_2;
 
 typedef struct EternalCorePhase2Api {
     EternalCoreApi v1_0; /* Unmodified 96-byte legacy table, including features=0. */
@@ -422,6 +513,10 @@ typedef struct EternalCorePhase2Api {
     EcRegisterCommandRouteFn register_command_route;
     EcUnregisterCommandRouteFn unregister_command_route;
     EcAuthorizeInvocationFn authorize_invocation;
+    EcRegisterConsumerFn register_consumer;
+    EcQueryConsumerFn query_consumer;
+    EcAckConsumerEventFn ack_consumer_event;
+    EcRetryConsumerEventFn retry_consumer_event;
 } EternalCorePhase2Api;
 
 /* Core owns a scoped table until that module binding is revoked/disabled or Core
@@ -449,7 +544,16 @@ EC_STATIC_ASSERT(sizeof(EcPhase2OutboxEvent)==104, "Phase2 outbox event layout")
 EC_STATIC_ASSERT(sizeof(EcPhase2OutboxBuffer)==48, "Phase2 outbox buffer layout");
 EC_STATIC_ASSERT(sizeof(EcPhase2OutboxNotice)==32, "Phase2 outbox notice layout");
 EC_STATIC_ASSERT(sizeof(EternalCorePhase2ApiV1_1)==240, "Phase2 1.1 prefix layout");
-EC_STATIC_ASSERT(sizeof(EternalCorePhase2Api)==264, "Phase2 1.2 independent table layout");
+EC_STATIC_ASSERT(sizeof(EternalCorePhase2ApiV1_2)==264, "Phase2 1.2 prefix layout");
+EC_STATIC_ASSERT(sizeof(EternalCorePhase2Api)==296, "Phase2 1.3 independent table layout");
+EC_STATIC_ASSERT(offsetof(EternalCorePhase2Api,register_consumer)==264, "Phase2 1.3 appends after full 1.2 prefix");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerRegistrationRequest)==48, "Consumer registration request");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerRegistration)==56, "Consumer registration result");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerQueryRequest)==56, "Consumer query request");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerEvent)==144, "Consumer event layout");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerBuffer)==48, "Consumer buffer layout");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerEventRequest)==88, "Consumer ACK request");
+EC_STATIC_ASSERT(sizeof(EcPhase2ConsumerRetryRequest)==120, "Consumer retry request");
 EC_STATIC_ASSERT(offsetof(EternalCorePhase2Api,register_command_route)==240, "Phase2 1.2 appends after full 1.1 prefix");
 EC_STATIC_ASSERT(sizeof(EcPhase2Invocation)==152, "Invocation layout");
 EC_STATIC_ASSERT(sizeof(EcPhase2CommandRouteRequest)==72, "Command route layout");

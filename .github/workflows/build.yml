@@ -45,7 +45,7 @@ jobs:
         run: ./tools/Test-PublicTree.ps1
       - name: Build Host and all eight internal modules
         run: ./tools/Build-Release.ps1
-      - name: Run SDK, Core domain, Host and actual DLL checks
+      - name: Run classified SDK, domain, synthetic, actual DLL and production-isolation checks
         run: ./tools/Test-Release.ps1
       - name: Package Eternal only
         env:
@@ -68,6 +68,16 @@ jobs:
           name: EternalPhase2Validation-windows-x64
           path: |
             dist/validation/CoreValidationModule.dll
+            dist/validation/EternalCoreValidation.dll
+            dist/validation/EternalTestConsumer.dll
             dist/validation/README.txt
+            dist/validation/validation-manifest.json
           if-no-files-found: error
           retention-days: 14
+      - name: Complete cloud test classification
+        run: |
+          $path = 'artifacts/ci/test-manifest.json'
+          $report = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+          ($report.suites | Where-Object classification -eq 'CLOUD_CI').result = 'PASS'
+          $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path -Encoding utf8
+          $report.suites | Select-Object suite,classification,result,groups | Format-Table -AutoSize

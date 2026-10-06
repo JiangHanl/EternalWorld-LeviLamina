@@ -1,6 +1,6 @@
 # Phase 2 验收报告
 
-状态：本轮实现、内部回归和可执行的服主验收已完成；Phase 2 整体验收未完成，剩余真实场景明确保留 NOT RUN。Phase 1.5 历史记录保持原样，本页只记录 Phase 2。更新于 2026-10-05。
+状态：正在按最新自动化策略完成 Phase 2 收尾，尚未把新 SDK 1.3 云 CI / 云 Artifact 回归标记通过。日常人工客户端测试已取消；未执行 REAL_CLIENT 项统一 DEFERRED_REAL_CLIENT。内部全部验收通过后才标记 DEVELOPMENT COMPLETE，生产仍 PENDING REAL CLIENT。规则见 [TESTING.md](../TESTING.md) 与 [开服前清单](../PRE_RELEASE_CHECKLIST.md)。Phase 1.5 历史记录保持原样，以下 SDK 1.2 表格及叙述保留其当时的证据范围，不能当作 1.3 已验收。更新于 2026-10-05。
 
 公开汇总：[云产物与生命周期](phase2-cloud-evidence.json)、[服主与内部恢复验收](phase2-player-evidence.json)。只包含状态，不公开身份、余额、数据库或原始日志。
 

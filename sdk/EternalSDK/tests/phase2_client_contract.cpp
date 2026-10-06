@@ -48,6 +48,7 @@ struct Provider {
         api.check_permission=permission;api.read_asset=asset;api.submit_mutation=submit;
         api.poll_receipt_v2=receipt;api.read_outbox=outbox;
         api.register_command_route=registerRoute;api.unregister_command_route=unregisterRoute;api.authorize_invocation=invocation;
+        api.register_consumer=registerConsumer;api.query_consumer=queryConsumer;api.ack_consumer_event=ackConsumer;api.retry_consumer_event=retryConsumer;
         host=output<EmHostContext>();host.abi_major=EM_ABI_MAJOR;host.abi_minor=EM_ABI_MINOR;
         host.instance=this;host.query_service=query;
     }
@@ -106,6 +107,22 @@ struct Provider {
     static EcStatus EC_CALL invocation(const EcPhase2InvocationAuthorization* request,EcPhase2InvocationGrant* out)noexcept {
         if(!same(request->caller_context,active->api.caller_context)||!same(request->invocation,{7,8}))return EC_DENIED;
         *out=output<EcPhase2InvocationGrant>();out->capability=active->issued;out->subject=active->target;return EC_OK;
+    }
+    static EcStatus EC_CALL registerConsumer(const EcPhase2ConsumerRegistrationRequest* request,EcPhase2ConsumerRegistration* out)noexcept {
+        if(request->struct_size!=sizeof(*request)||!same(request->caller_context,active->api.caller_context))return EC_DENIED;
+        *out=output<EcPhase2ConsumerRegistration>();out->consumer={901,902};out->caller_generation=active->api.caller_generation;out->instance_epoch=active->api.instance_epoch;return EC_OK;
+    }
+    static EcStatus EC_CALL queryConsumer(const EcPhase2ConsumerQueryRequest* request,EcPhase2ConsumerBuffer* out)noexcept {
+        if(request->struct_size!=sizeof(*request)||!same(request->caller_context,active->api.caller_context)||!same(request->consumer,{901,902}))return EC_DENIED;
+        if(out->count||out->required||out->reserved0||out->reserved1)return EC_ABI_MISMATCH;
+        out->required=1;if(!out->data||!out->capacity)return EC_BUFFER_TOO_SMALL;
+        out->data[0]={};out->data[0].event=output<EcPhase2OutboxEvent>();out->data[0].event.event_id=10;out->data[0].delivery={903,904};out->count=1;return EC_OK;
+    }
+    static EcStatus EC_CALL ackConsumer(const EcPhase2ConsumerEventRequest* request)noexcept {
+        return request->struct_size==sizeof(*request)&&same(request->caller_context,active->api.caller_context)&&same(request->consumer,{901,902})&&same(request->delivery,{903,904})&&request->event_id==10?EC_OK:EC_DENIED;
+    }
+    static EcStatus EC_CALL retryConsumer(const EcPhase2ConsumerRetryRequest* request)noexcept {
+        return request->struct_size==sizeof(*request)&&same(request->caller_context,active->api.caller_context)&&same(request->consumer,{901,902})&&same(request->delivery,{903,904})&&request->event_id==10?EC_OK:EC_DENIED;
     }
     static EcStatus EC_CALL identity(const EcPhase2QueryRequest* request,EcPhase2IdentitySnapshot* out,EcUtf8Buffer* name)noexcept {
         auto& p=*active;auto status=p.authorize(request->meta,sizeof(*request));if(status!=EC_OK)return status;
@@ -216,6 +233,16 @@ int main() {
             require(c.authorize(request,grant)==EC_OK&&same(grant.capability,p.issued)&&same(grant.subject,p.target),"Provider-issued invocation forwarding");
             request.invocation={70,80};require(c.authorize(request,grant)==EC_DENIED,"Self-made invocation not minted");
             EcPhase2RouteRemovalRequest removal{};require(c.unregisterRoute(removal)==EC_OK,"Scoped removal forwarding");
+        },count);
+        test("consumer SDK preserves caller storage and scoped infrastructure",[]{
+            Provider p;auto c=p.client();p.enabled=0;p.development=EC_P2_FEATURE_ALL;EcPhase2ConsumerRegistrationRequest registration{};registration.local_key={"projection",10,0};EcPhase2ConsumerRegistration consumer{};
+            require(c.registerConsumer(registration,consumer)==EC_UNSUPPORTED,"Default production client refuses consumer devbits");c.setDevelopmentValidation(true);
+            require(c.registerConsumer(registration,consumer)==EC_OK&&same(consumer.consumer,{901,902}),"Core-only scoped consumer handle");
+            registration.caller_context={999,998};require(c.registerConsumer(registration,consumer)==EC_DENIED,"Cannot claim another module");
+            EcPhase2ConsumerQueryRequest request{};request.consumer={901,902};request.limit=1;EcPhase2ConsumerBuffer output{};EcPhase2ConsumerEvent storage{};output.data=&storage;output.capacity=1;output.count=output.required=99;output.reserved0=99;output.reserved1=99;
+            require(c.queryConsumer(request,output)==EC_OK&&output.data==&storage&&output.capacity==1&&output.count==1,"Consumer buffer ownership and metadata");
+            EcPhase2ConsumerEventRequest ack{};ack.consumer=request.consumer;ack.delivery=storage.delivery;ack.event_id=storage.event.event_id;ack.request_id={11,12};require(c.acknowledgeConsumer(ack)==EC_OK,"ACK scoped forwarding");ack.delivery={100,101};require(c.acknowledgeConsumer(ack)==EC_DENIED,"Fake delivery still checked by Core");
+            EcPhase2ConsumerRetryRequest retry{};retry.consumer=request.consumer;retry.delivery=storage.delivery;retry.event_id=storage.event.event_id;retry.request_id={13,14};retry.delay_ms=1000;retry.error={"offline",7,0};require(c.retryConsumer(retry)==EC_OK,"Retry scoped forwarding");
         },count);
         test("shared table cannot create a caller binding",[]{
             Provider p;p.api.caller_context={};auto c=p.client();EcPhase2Submission out{};

@@ -9,9 +9,9 @@
 ## 实施顺序
 
 1. 持久域：编号 002 migration；保留 001 校验及原 17 组语义。验证 fresh/upgrade/失败回滚/未知新版拒绝/备份、身份冲突、资产原子性、拒绝审计与 Outbox 消费者状态。
-2. 公共契约：保留原 96 字节 Core API 与 Module ABI，独立 Core 服务采用 1.2 / 264 字节，并保留 1.1 的完整 240 字节前缀；通过公开 Invocation 路由从真实玩家申请限定票据。跨 DLL 不传 STL、异常、私有类或 SQLite handle。
+2. 公共契约：保留原 96 字节 Core API 与 Module ABI，独立 Core 服务采用 1.3 / 296 字节，保留 1.1 / 1.2 的完整 240 / 264 字节前缀；公开 Invocation 路由申请限定票据，消费者经公开 SDK 登记、查询、ACK 和 retry。跨 DLL 不传 STL、异常、私有类或 SQLite handle。
 3. 可信接入：Host 只复制认证引擎输入和渲染通用诊断表单，Core 决定身份、授权及资产行为。Host 注册的模块查询取得 Core 专属上下文，公共查询拒绝私有 native ingress。
-4. 本地独立测试、公开索引/许可证审查、稳定提交、GitHub Actions、下载云 Artifact、独立 BDS 启停与真实玩家验收。
+4. 本地独立测试、多身份合成集成、真实 DLL 消费与隔离、公开索引/许可证审查、稳定提交、GitHub Actions、下载云 Artifact、自动独立 BDS 启停。人工客户端不再作为日常开发阻塞项。
 
 ## 信任与数据所有权
 
@@ -33,9 +33,9 @@ Money 使用整数分，100 分为一两；Reputation 使用整数且不允许�
 
 ## 验收分层
 
-独立 synthetic 测试证明域和 ABI 行为；GitHub CI 证明固定工具链构建、测试和打包；真实 BDS 回归证明云 DLL 的加载与生命周期；真实客户端证明认证 Player 接入、OP/Role 分离、权限撤销和资产重启保持。各层单独记 PASS / NOT RUN / BLOCKED，不能互相替代。
+统一采用 UNIT、DOMAIN、SYNTHETIC_INTEGRATION、REAL_DLL、REAL_BDS、CLOUD_CI、REAL_CLIENT 七类，详见 [测试策略](../TESTING.md)。各层独立记录，前六类不得写成 REAL_CLIENT。多身份 harness 用临时数据库验证授权、撤销、会话重建、转账、账本与重启；消费者真实 DLL 通过 SDK 验证 ACK、离线、重试、乱序与进程崩溃重放。
 
-用户已确认可配合真实客户端测试。Owner 账号和普通账号分别验证，当前未执行项不记 PASS。需要真实操作的诊断表单只用于 Core 授权测试，不启用 Management 等业务模块。
+最新用户指示取消日常人工客户端步骤。内部各层与云 Artifact 回归充分通过后，阶段可标记 DEVELOPMENT COMPLETE 并进入下一阶段；生产保持 PENDING REAL CLIENT。剩余真实玩家项目为 DEFERRED_REAL_CLIENT，集中在 [开服前清单](../PRE_RELEASE_CHECKLIST.md)，不反复要求用户配合。测试 variant 与测试模块不进入正式 Release ZIP，生产编译不能由配置开启开发入口。
 
 ## 回滚
 

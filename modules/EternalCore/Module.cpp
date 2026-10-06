@@ -3,6 +3,13 @@
 #include "api/ApiService.hpp"
 #include "runtime/Runtime.hpp"
 #include <memory>
+#ifdef ETERNAL_CORE_RUNTIME_TESTING
+#error Private Runtime test hooks must never be compiled into a module DLL
+#endif
+
+#ifdef ETERNAL_CORE_VALIDATION_BUILD
+extern "C" EM_EXPORT uint32_t EM_CALL EternalCore_ValidationBuildMarker() noexcept { return 1; }
+#endif
 
 namespace {
 constexpr EmUtf8View view(const char* data, uint32_t length) { return {data, length, 0}; }

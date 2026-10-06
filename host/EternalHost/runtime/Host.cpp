@@ -219,7 +219,8 @@ struct Host::Impl {
         if(service==services.end() || service->second.owner->report.id!=EM_CORE_MODULE_ID ||
            provider.api_major!=EC_PHASE2_API_MAJOR || provider.api_minor<1 ||
            provider.api_minor<request->minimum_minor)return EM_ABI_MISMATCH;
-        const auto minimumSize=request->minimum_minor>=2?EC_PHASE2_API_V1_2_SIZE:EC_PHASE2_API_V1_1_SIZE;
+        const auto minimumSize=request->minimum_minor>=3?EC_PHASE2_API_V1_3_SIZE:
+            request->minimum_minor>=2?EC_PHASE2_API_V1_2_SIZE:EC_PHASE2_API_V1_1_SIZE;
         const auto requested=request->required_capabilities&declared->caps;
         if(n.binding && n.binding->provider_generation==provider.generation &&
            n.binding->module_generation==n.generation) {
@@ -258,6 +259,8 @@ struct Host::Impl {
                 api->instance_epoch==result.instance_epoch;
             if(good && api->api_minor>=2)good=api->struct_size>=EC_PHASE2_API_V1_2_SIZE &&
                 api->register_command_route && api->unregister_command_route && api->authorize_invocation;
+            if(good && api->api_minor>=3)good=api->struct_size>=EC_PHASE2_API_V1_3_SIZE &&
+                api->register_consumer && api->query_consumer && api->ack_consumer_event && api->retry_consumer_event;
             if(!good) {
                 if(nonzero(result.caller_context) && result.caller_generation) {
                     constexpr char reason[]="Host refused malformed scoped API";
@@ -274,6 +277,8 @@ struct Host::Impl {
            api->api_minor<request->minimum_minor)return EM_ABI_MISMATCH;
         if(request->minimum_minor>=2 && (!api->register_command_route ||
            !api->unregister_command_route || !api->authorize_invocation))return EM_ABI_MISMATCH;
+        if(request->minimum_minor>=3 && (!api->register_consumer || !api->query_consumer ||
+           !api->ack_consumer_event || !api->retry_consumer_event))return EM_ABI_MISMATCH;
         *out={sizeof(*out),EM_STRUCT_VERSION,cached.result.scoped_api,cached.result.table_size,
               api->api_major,api->api_minor,0,cached.capabilities,provider.generation};
         return EM_OK;

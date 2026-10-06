@@ -1,6 +1,6 @@
 # Core Phase 2 服务契约
 
-本页描述当前实现，不代表真实客户端验收已完成。验收记录见 `PHASE2_TEST_REPORT.md`。旧 API 1.0 的 96 字节函数表和 Module ABI 1.0 布局不变，旧资产 feature bits 保持 0。独立 `EternalCore.Phase2Api` 扩展至 1.2，保留完整 240 字节 1.1 前缀，在尾部追加三个函数，完整表为 264 字节；底层依然是稳定 C ABI。
+本页描述当前实现，不代表生产或真实客户端验收已完成。验收记录见 `PHASE2_TEST_REPORT.md`。旧 API 1.0 的 96 字节函数表和 Module ABI 1.0 布局不变，旧资产 feature bits 保持 0。独立 `EternalCore.Phase2Api` 扩展至 1.3：保留完整 240 字节 1.1 与 264 字节 1.2 前缀，尾部追加四个消费者函数，完整表 296 字节；底层依然是稳定 C ABI。
 
 ## 公开服务
 
@@ -17,8 +17,10 @@
 | read_outbox | 带权限和持久 cursor 的事件读取，不等同消费确认 |
 | register_command_route / unregister_command_route | 为当前真实模块绑定登记和撤销受限命令路由 |
 | authorize_invocation | 从 Core 签发的真实调用取得限定 Capability；不接受自报主体 |
+| register_consumer / query_consumer | 以实际模块与本地 key 建立后台消费者，查询待消费事件与不透明 delivery token |
+| ack_consumer_event / retry_consumer_event | 当前消费者与 delivery token 限定的 ACK / 持久重试；不能用猜测 eventId 跨消费者确认 |
 
-正式能力保持关闭，直到对应真实链路验收通过。开发验证命令是单独的可信引擎入口，不能成为普通模块 API 的降级路径。公开示例的 developmentValidation 和 validatedAssets 均为 false；当前版本拒绝 validatedAssets=true，不允许用配置伪装已验收。
+正式能力保持关闭。开发资产命令和消费者测试需要独立的编译验证变体；正式 Core 拒绝 developmentValidation=true 与 validatedAssets=true，不能用配置解除隔离。公开示例两值均 false。内部验证完成可推进开发 Phase，生产状态仍受开服前清单约束。
 
 ## 原生接入与模块绑定
 
@@ -28,7 +30,9 @@ Host 从实际模块描述符和 Enable 代次建立绑定；Core 将声明能�
 
 客户端发现服务必须明确请求本次 Enable 所需的非零模块能力。路由仅能由相应 CallerContext 登记。真实认证玩家执行 `ecore native invoke <moduleId> <routeId> <arguments>` 时，Core 向该绑定的同步回调交付 Invocation；输入参数不能指定 actor、XUID 或 Owner。公共授权接口从不可猜的 Invocation token 解析主体，再检查路线动作范围、当前角色、会话、模块代次、金额及预算。回调返回后不能再申请新票据；已签发票据继续受有效期与撤销检查约束。
 
-默认 C++ 客户端不使用开发功能位。独立验证模块必须显式选择 DevelopmentValidation，Core 同时检查私人开发开关和从真实调用签出的开发票据；客户端选项本身不提供权限。正式功能位仍为 0，其他模块不能用伪造参数开启资产服务。验证模块单独打包，正式 Eternal 包不包含它。
+默认 C++ 客户端不使用开发功能位。独立验证模块必须显式选择 DevelopmentValidation，Core 同时检查验证编译宏、私人开发开关和调用授权；客户端选项本身不提供权限。消费者要求 Core 私有批准与 Host 模块能力交集均含 Events 和 Audit，无需伪造在线玩家票据。注册与每次查询 / ACK / retry 仍校验 CallerContext、模块代次与 Core 实例；停止、撤销或重启后须重新发现服务和注册。正式功能位仍为 0，正式包不含验证模块。
+
+后台消费者可持久保存本地 key 和 eventId，不可保存 opaque consumer / delivery handle 或函数表。自己的副作用与去重记录先原子提交，再 ACK；进程在提交与 ACK 之间失败时，Core 重放同 eventId，消费者去重后完成 ACK。EventBus 只提供通知；消费者离线、重复或乱序通知不会替代持久状态。实物交付仍非 SQLite 原子事务，本阶段不承诺物品 exactly-once。
 
 兼容边界：保留 1.1 字段布局不等于旧辅助类二进制可直接运行。早期 1.1 `Phase2Client` 请求零能力并要求表大小恰好为 240，不能正确完成真实绑定。该辅助类须用当前 SDK 重新编译，显式声明所需能力；不为零审批请求增加授权 fallback。正常使用大小/版本检查的非零能力 1.1 C 前缀查询继续由 Host 验证。
 
