@@ -56,13 +56,14 @@ try {
         if ($case.libraries) { $testLibraries += $case.libraries }
         & $nativeLinker @nativeLinkerArguments ('/OUT:'+ $executable) @objects @testLibraries
         if ($LASTEXITCODE -ne 0) { throw "Test link failed: $($case.name)" }
-        $arguments = switch ($case.name) {
-            'ModuleArtifactTests' { @('bin/Eternal') }
-            'ValidationModuleTests' { @('bin/Eternal','bin/validation/CoreValidationModule.dll') }
-            'ConsumerModuleTests' { @('bin/Eternal','bin/validation/EternalCoreValidation.dll','bin/validation/EternalTestConsumer.dll') }
-            'ProductionIsolationTests' { @('bin/Eternal/modules/EternalCore.dll','bin/validation/EternalCoreValidation.dll') }
-            default { @() }
+        $argumentMap = @{
+            'ModuleArtifactTests'      = @('bin/Eternal')
+            'ValidationModuleTests'    = @('bin/Eternal','bin/validation/CoreValidationModule.dll')
+            'ConsumerModuleTests'      = @('bin/Eternal','bin/validation/EternalCoreValidation.dll','bin/validation/EternalTestConsumer.dll')
+            'ProductionIsolationTests' = @('bin/Eternal/modules/EternalCore.dll','bin/validation/EternalCoreValidation.dll')
         }
+        $arguments = @()
+        if ($argumentMap.ContainsKey($case.name)) { $arguments = $argumentMap[$case.name] }
         $testOutput = @(& $executable @arguments 2>&1)
         $testExit = $LASTEXITCODE
         $testOutput | Out-Host

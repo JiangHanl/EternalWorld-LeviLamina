@@ -266,7 +266,7 @@ struct Runtime::Impl {
     static EcStatus EC_CALL queryConsumer(const EcPhase2ConsumerQueryRequest* request,EcPhase2ConsumerBuffer* out)noexcept{return call([&](Impl& self)->EcStatus{
         if(!valid(request)||!valid(out)||request->reserved0||request->reserved1||request->limit<1||request->limit>100||out->reserved0||out->reserved1||out->capacity>100||(!out->data&&out->capacity))return EC_INVALID_ARGUMENT;
         Consumer* consumer=nullptr;Binding* binding=nullptr;auto code=self.consumer(request->caller_context,request->consumer,consumer,binding);if(code!=EC_OK)return code;
-        auto events=self.core->outboxFor(consumer->persistentName,request->limit);out->count=0;out->required=static_cast<uint32_t>(events.size());out->last_event_id=events.empty()?0:static_cast<uint64_t>(events.back().id);
+        auto events=self.core->consumerEvents(consumer->persistentName,request->limit);out->count=0;out->required=static_cast<uint32_t>(events.size());out->last_event_id=events.empty()?0:static_cast<uint64_t>(events.back().id);
         if(out->capacity<events.size())return EC_BUFFER_TOO_SMALL;self.purge();if(self.now()>UINT64_MAX-300000)return EC_LIMIT_EXCEEDED;
         std::vector<EcPhase2ConsumerEvent> rows;rows.reserve(events.size());std::size_t needed=0;auto consumerKey=id(request->consumer);
         for(const auto& event:events){auto row=EcPhase2ConsumerEvent{};code=self.projectEvent(event,row.event);if(code!=EC_OK)return code;row.retry_count=event.retryCount;row.next_attempt_at_unix_ms=static_cast<uint64_t>(event.nextAttemptAt);row.delivery_state=event.deliveryStatus=="offline"?EC_P2_DELIVERY_OFFLINE:event.deliveryStatus=="retry"?EC_P2_DELIVERY_RETRY:EC_P2_DELIVERY_PENDING;

@@ -219,6 +219,10 @@ class Core {
     // At-least-once projection. Read current Core balances, or reject stale event IDs;
     // acknowledgements deduplicate by (consumer,event). No physical item delivery.
     std::vector<OutboxEvent> outboxFor(std::string_view consumerId, std::size_t limit = 100) const;
+    // Enriched at-least-once projection for operator-approved SDK consumers only. Same
+    // delivery scope as outboxFor, but also exposes createdAt and request attribution.
+    // outboxFor keeps its legacy metadata semantics unchanged.
+    std::vector<OutboxEvent> consumerEvents(std::string_view consumerId, std::size_t limit = 100) const;
     Status recordOutboxAttempt(std::string_view consumerId, std::int64_t eventId,
                                std::string_view error, std::int64_t retryAfterMs,
                                bool targetOffline = false);

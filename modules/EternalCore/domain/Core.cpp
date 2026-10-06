@@ -1373,6 +1373,26 @@ std::vector<OutboxEvent> Core::outboxFor(std::string_view consumerId, std::size_
         impl_->db,
         "SELECT "
         "o.id,o.transactionId,o.targetUuid,o.eventType,o.payload,d.retryCount,d.nextAttemptAt,d."
+        "lastError,d.status FROM outbox o JOIN outbox_delivery d ON d.eventId=o.id WHERE "
+        "d.consumerId=? AND d.status!='acknowledged' AND d.nextAttemptAt<=? ORDER BY o.id LIMIT ?");
+    q.text(1, consumerId);
+    q.number(2, now());
+    q.number(3, static_cast<std::int64_t>(limit));
+    std::vector<OutboxEvent> events;
+    while (q.row())
+        events.push_back({q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
+                          static_cast<std::uint64_t>(q.integer(5)), q.integer(6), q.string(7),
+                          q.string(8)});
+    return events;
+}
+std::vector<OutboxEvent> Core::consumerEvents(std::string_view consumerId, std::size_t limit) const {
+    if (!textValid(consumerId, 80) || limit == 0 || limit > 1000)
+        throw std::invalid_argument("Invalid outbox consumer or limit");
+    std::lock_guard lock(impl_->mutex);
+    Statement q(
+        impl_->db,
+        "SELECT "
+        "o.id,o.transactionId,o.targetUuid,o.eventType,o.payload,d.retryCount,d.nextAttemptAt,d."
         "lastError,d.status,o.createdAt,t.requestId FROM outbox o JOIN outbox_delivery d ON d.eventId=o.id "
         "JOIN transactions t ON t.transactionId=o.transactionId WHERE "
         "d.consumerId=? AND d.status!='acknowledged' AND d.nextAttemptAt<=? ORDER BY o.id LIMIT ?");
@@ -1383,7 +1403,7 @@ std::vector<OutboxEvent> Core::outboxFor(std::string_view consumerId, std::size_
     while (q.row())
         events.push_back({q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
                           static_cast<std::uint64_t>(q.integer(5)), q.integer(6), q.string(7),
-                          q.string(8),q.integer(9),q.string(10)});
+                          q.string(8), q.integer(9), q.string(10)});
     return events;
 }
 Status Core::recordOutboxAttempt(std::string_view consumerId, std::int64_t eventId,
