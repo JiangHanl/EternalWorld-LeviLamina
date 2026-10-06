@@ -5,7 +5,7 @@
 | Phase 1 | 最小原生Core/SDK诊断在真实BDS加载、生命周期和重启 | 已验证历史基线 |
 | Phase 1.5 | Host LL-only、八内部模块握手、SDK、构建/CI/Artifact及实服启停、公开安全与许可证 | 工程化验收完成；最终文档提交按发布流程复核 |
 | Phase 2 | 可信身份、配置、权限/能力链、Core资产与正式回执、Outbox和原生恢复 | DEVELOPMENT COMPLETE；生产 PENDING REAL CLIENT |
-| Phase 3 | Commerce钱庄/税/伴礼/收购/寄售与交付 | 规划 |
+| Phase 3 | Commerce钱庄/税/伴礼/收购/寄售与交付 | 实施中；见 [计划](docs/PHASE3_PLAN.md) |
 | Phase 4 | Life首入/签到/补签/成长/进度/知己/资格 | 规划 |
 | Phase 5 | World传送/保护道具/死亡/NPC/PVP/维护/原生宅地 | 规划 |
 | Phase 6 | Content规则/公告/委托/活动定义与发布 | 规划 |
