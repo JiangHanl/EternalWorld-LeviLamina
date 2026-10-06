@@ -2,7 +2,7 @@
 #include <string_view>
 
 namespace eternal::commerce::detail {
-inline constexpr int schemaVersion = 4;
+inline constexpr int schemaVersion = 5;
 inline constexpr std::string_view schemaV1 = R"SQL(
 CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL) STRICT;
 CREATE TABLE schema_migration(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL,appliedAt INTEGER NOT NULL) STRICT;
@@ -25,5 +25,10 @@ inline constexpr std::string_view schemaV4 = R"SQL(
 CREATE TABLE acquisition_quota(playerUuid TEXT NOT NULL,day INTEGER NOT NULL,usedMinor INTEGER NOT NULL DEFAULT 0 CHECK(usedMinor>=0),PRIMARY KEY(playerUuid,day)) STRICT;
 CREATE TABLE acquisitions(id INTEGER PRIMARY KEY,requesterUuid TEXT NOT NULL,item TEXT NOT NULL,amountMinor INTEGER NOT NULL CHECK(amountMinor>0),idempotencyKey TEXT NOT NULL,day INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','fulfilled','cancelled')),createdAtMs INTEGER NOT NULL,UNIQUE(requesterUuid,idempotencyKey)) STRICT;
 PRAGMA user_version=4;
+)SQL";
+inline constexpr std::string_view schemaV5 = R"SQL(
+CREATE TABLE delivery_requests(id INTEGER PRIMARY KEY,playerUuid TEXT NOT NULL,item TEXT NOT NULL,nbt TEXT NOT NULL,source TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','delivering','delivered','reconciling')),attemptCount INTEGER NOT NULL DEFAULT 0 CHECK(attemptCount>=0),createdAtMs INTEGER NOT NULL,updatedAtMs INTEGER NOT NULL,lastError TEXT NOT NULL DEFAULT '') STRICT;
+CREATE INDEX delivery_pending ON delivery_requests(status,updatedAtMs);
+PRAGMA user_version=5;
 )SQL";
 } // namespace eternal::commerce::detail

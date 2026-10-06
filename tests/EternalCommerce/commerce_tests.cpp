@@ -73,6 +73,9 @@ int main() {
         const auto sql4 = fs::path(__FILE__).parent_path().parent_path().parent_path() /
                           "migrations/EternalCommerce/004_acquisition.sql";
         require(read(sql4) == detail::schemaV4, "SQL and compiled schema v4 differ");
+        const auto sql5 = fs::path(__FILE__).parent_path().parent_path().parent_path() /
+                          "migrations/EternalCommerce/005_delivery.sql";
+        require(read(sql5) == detail::schemaV5, "SQL and compiled schema v5 differ");
     });
 
     test("gift validation and 2% fee", [&] {
@@ -356,6 +359,58 @@ int main() {
         auto r2 = commerce.requestAcquisition("alice", "minecraft:iron",
                                               100 * minorUnitsPerLiang, "k2", 1000000);
         equal(commerce.cancelAcquisition(r2.acquisition->id, "bob", 1000000), Status::Conflict);
+    });
+
+    test("delivery lifecycle delivers after begin and complete", [&] {
+        Commerce commerce((root / "delivery-lifecycle.sqlite").string());
+        auto r = commerce.createDelivery("alice", "minecraft:diamond", "{tag:1}", "consignment",
+                                         1000000);
+        equal(r.status, Status::Ok);
+        require(r.delivery->status == "pending", "Wrong initial status");
+        const auto id = r.delivery->id;
+        equal(commerce.beginDelivery(id, 1000000), Status::Ok);
+        auto delivering = commerce.delivery(id).delivery;
+        require(delivering->status == "delivering" && delivering->attemptCount == 1,
+                "Not delivering");
+        equal(commerce.completeDelivery(id, 1000000), Status::Ok);
+        require(commerce.delivery(id).delivery->status == "delivered", "Not delivered");
+        equal(commerce.completeDelivery(id, 1000000), Status::Conflict);
+    });
+
+    test("delivery failure stops auto-retry until reconciliation", [&] {
+        Commerce commerce((root / "delivery-reconcile.sqlite").string());
+        auto r = commerce.createDelivery("alice", "minecraft:diamond", "{tag:1}", "consignment",
+                                         1000000);
+        const auto id = r.delivery->id;
+        equal(commerce.beginDelivery(id, 1000000), Status::Ok);
+        equal(commerce.failDelivery(id, "inventory full", 1000000), Status::Ok);
+        auto reconciling = commerce.delivery(id).delivery;
+        require(reconciling->status == "reconciling", "Not reconciling");
+        require(reconciling->lastError == "inventory full", "Error lost");
+        require(commerce.pendingDeliveries().empty(), "Reconciling should not be pending");
+        require(commerce.reconcilingDeliveries().size() == 1, "Reconciling not listed");
+        equal(commerce.reconcileDelivery(id, 1000000), Status::Ok);
+        require(commerce.delivery(id).delivery->status == "pending",
+                "Not pending after reconcile");
+        equal(commerce.beginDelivery(id, 1000000), Status::Ok);
+        equal(commerce.completeDelivery(id, 1000000), Status::Ok);
+    });
+
+    test("delivery preserves item NBT across restart", [&] {
+        std::int64_t id{};
+        {
+            Commerce commerce((root / "delivery-restart.sqlite").string());
+            auto r = commerce.createDelivery("alice", "minecraft:diamond", "{tag:1}",
+                                             "consignment", 1000000);
+            id = r.delivery->id;
+            equal(commerce.beginDelivery(id, 1000000), Status::Ok);
+            equal(commerce.failDelivery(id, "crash", 1000000), Status::Ok);
+        }
+        Commerce commerce((root / "delivery-restart.sqlite").string());
+        auto d = commerce.delivery(id).delivery;
+        require(d->item == "minecraft:diamond" && d->nbt == "{tag:1}" &&
+                    d->status == "reconciling",
+                "Delivery state lost on restart");
     });
 
     std::cout << "Commerce Domain: " << groups

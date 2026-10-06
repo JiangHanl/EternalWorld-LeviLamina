@@ -176,6 +176,11 @@ struct Commerce::Impl {
                     if (!v4.row() || v4.string(0) != detail::sha256(detail::schemaV4))
                         throw std::runtime_error("Commerce schema migration checksum mismatch");
                 }
+                if (version >= 5) {
+                    Statement v5(db, "SELECT checksum FROM schema_migration WHERE version=5");
+                    if (!v5.row() || v5.string(0) != detail::sha256(detail::schemaV5))
+                        throw std::runtime_error("Commerce schema migration checksum mismatch");
+                }
                 verifyDatabase(db);
             }
             {
@@ -217,6 +222,13 @@ struct Commerce::Impl {
                 migration4.text(1, detail::sha256(detail::schemaV4));
                 migration4.number(2, now());
                 migration4.done();
+                execute(db, std::string(detail::schemaV5).c_str());
+                Statement migration5(
+                    db, "INSERT INTO schema_migration(version,checksum,appliedAt) "
+                        "VALUES(5,?,?)");
+                migration5.text(1, detail::sha256(detail::schemaV5));
+                migration5.number(2, now());
+                migration5.done();
                 tx.commit();
                 execute(db, "PRAGMA foreign_keys=ON");
                 verifyDatabase(db);
@@ -714,6 +726,176 @@ Status Commerce::cancelAcquisition(std::int64_t id, std::string_view requesterUu
     } catch (const SqlError &e) {
         return sqlStatus(e);
     }
+}
+
+DeliveryResult Commerce::createDelivery(std::string_view playerUuid, std::string_view item,
+                                        std::string_view nbt, std::string_view source,
+                                        std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (!textValid(playerUuid, 64) || !textValid(item, 256) || !textValid(nbt, 1048576) ||
+            !textValid(source, 64) || nowMs < 0)
+            return {Status::Invalid, std::nullopt, "Invalid delivery parameters"};
+        Transaction tx(impl_->db);
+        Statement insert(impl_->db,
+                         "INSERT INTO delivery_requests(playerUuid,item,nbt,source,status,"
+                         "createdAtMs,updatedAtMs) VALUES(?,?,?,?,'pending',?,?)");
+        insert.text(1, playerUuid);
+        insert.text(2, item);
+        insert.text(3, nbt);
+        insert.text(4, source);
+        insert.number(5, nowMs);
+        insert.number(6, nowMs);
+        insert.done();
+        const auto id = sqlite3_last_insert_rowid(impl_->db);
+        tx.commit();
+        return {Status::Ok,
+                Delivery{id, std::string(playerUuid), std::string(item), std::string(nbt),
+                         std::string(source), "pending", 0, nowMs, nowMs, ""},
+                ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), std::nullopt, e.what()};
+    }
+}
+
+DeliveryResult Commerce::delivery(std::int64_t id) const {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0)
+            return {Status::Invalid, std::nullopt, "Invalid delivery id"};
+        Statement q(impl_->db,
+                    "SELECT id,playerUuid,item,nbt,source,status,attemptCount,createdAtMs,"
+                    "updatedAtMs,lastError FROM delivery_requests WHERE id=?");
+        q.number(1, id);
+        if (!q.row())
+            return {Status::NotFound, std::nullopt, "Delivery not found"};
+        return {Status::Ok,
+                Delivery{q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
+                         q.string(5), q.integer(6), q.integer(7), q.integer(8), q.string(9)},
+                ""};
+    } catch (const SqlError &e) {
+        return {sqlStatus(e), std::nullopt, e.what()};
+    }
+}
+
+Status Commerce::beginDelivery(std::int64_t id, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement update(impl_->db,
+                         "UPDATE delivery_requests SET status='delivering',"
+                         "attemptCount=attemptCount+1,updatedAtMs=? WHERE id=? AND "
+                         "status='pending'");
+        update.number(1, nowMs);
+        update.number(2, id);
+        update.done();
+        if (sqlite3_changes(impl_->db) != 1)
+            return Status::Conflict;
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+Status Commerce::completeDelivery(std::int64_t id, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement update(impl_->db,
+                         "UPDATE delivery_requests SET status='delivered',updatedAtMs=? WHERE "
+                         "id=? AND status='delivering'");
+        update.number(1, nowMs);
+        update.number(2, id);
+        update.done();
+        if (sqlite3_changes(impl_->db) != 1)
+            return Status::Conflict;
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+Status Commerce::failDelivery(std::int64_t id, std::string_view error, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || !textValid(error, 512) || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement update(impl_->db,
+                         "UPDATE delivery_requests SET status='reconciling',lastError=?,"
+                         "updatedAtMs=? WHERE id=? AND status='delivering'");
+        update.text(1, error);
+        update.number(2, nowMs);
+        update.number(3, id);
+        update.done();
+        if (sqlite3_changes(impl_->db) != 1)
+            return Status::Conflict;
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+Status Commerce::reconcileDelivery(std::int64_t id, std::int64_t nowMs) {
+    std::lock_guard lock(impl_->mutex);
+    try {
+        if (id <= 0 || nowMs < 0)
+            return Status::Invalid;
+        Transaction tx(impl_->db);
+        Statement update(impl_->db,
+                         "UPDATE delivery_requests SET status='pending',updatedAtMs=? WHERE "
+                         "id=? AND status='reconciling'");
+        update.number(1, nowMs);
+        update.number(2, id);
+        update.done();
+        if (sqlite3_changes(impl_->db) != 1)
+            return Status::Conflict;
+        tx.commit();
+        return Status::Ok;
+    } catch (const SqlError &e) {
+        return sqlStatus(e);
+    }
+}
+
+std::vector<Delivery> Commerce::pendingDeliveries(std::size_t limit) const {
+    std::lock_guard lock(impl_->mutex);
+    if (limit == 0 || limit > 1000)
+        throw std::invalid_argument("Delivery limit must be 1..1000");
+    std::vector<Delivery> result;
+    Statement q(impl_->db,
+                "SELECT id,playerUuid,item,nbt,source,status,attemptCount,createdAtMs,"
+                "updatedAtMs,lastError FROM delivery_requests WHERE status='pending' ORDER BY "
+                "id LIMIT ?");
+    q.number(1, static_cast<std::int64_t>(limit));
+    while (q.row())
+        result.push_back(Delivery{q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
+                                  q.string(5), q.integer(6), q.integer(7), q.integer(8),
+                                  q.string(9)});
+    return result;
+}
+
+std::vector<Delivery> Commerce::reconcilingDeliveries(std::size_t limit) const {
+    std::lock_guard lock(impl_->mutex);
+    if (limit == 0 || limit > 1000)
+        throw std::invalid_argument("Delivery limit must be 1..1000");
+    std::vector<Delivery> result;
+    Statement q(impl_->db,
+                "SELECT id,playerUuid,item,nbt,source,status,attemptCount,createdAtMs,"
+                "updatedAtMs,lastError FROM delivery_requests WHERE status='reconciling' ORDER "
+                "BY id LIMIT ?");
+    q.number(1, static_cast<std::int64_t>(limit));
+    while (q.row())
+        result.push_back(Delivery{q.integer(0), q.string(1), q.string(2), q.string(3), q.string(4),
+                                  q.string(5), q.integer(6), q.integer(7), q.integer(8),
+                                  q.string(9)});
+    return result;
 }
 
 } // namespace eternal::commerce

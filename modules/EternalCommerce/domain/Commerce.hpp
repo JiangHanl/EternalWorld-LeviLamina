@@ -7,6 +7,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace eternal::commerce {
 
@@ -114,6 +115,25 @@ struct AcquisitionResult {
     std::string error;
 };
 
+struct Delivery {
+    std::int64_t id{};
+    std::string playerUuid;
+    std::string item;
+    std::string nbt;
+    std::string source;
+    std::string status;
+    std::int64_t attemptCount{};
+    std::int64_t createdAtMs{};
+    std::int64_t updatedAtMs{};
+    std::string lastError;
+};
+
+struct DeliveryResult {
+    Status status{Status::Invalid};
+    std::optional<Delivery> delivery;
+    std::string error;
+};
+
 std::int64_t computeTieredTax(std::int64_t taxableMinor, std::span<const TaxTier> tiers);
 
 class Commerce {
@@ -146,6 +166,16 @@ class Commerce {
                                            std::int64_t nowMs) const;
     Status cancelAcquisition(std::int64_t id, std::string_view requesterUuid,
                              std::int64_t nowMs);
+    DeliveryResult createDelivery(std::string_view playerUuid, std::string_view item,
+                                  std::string_view nbt, std::string_view source,
+                                  std::int64_t nowMs);
+    DeliveryResult delivery(std::int64_t id) const;
+    Status beginDelivery(std::int64_t id, std::int64_t nowMs);
+    Status completeDelivery(std::int64_t id, std::int64_t nowMs);
+    Status failDelivery(std::int64_t id, std::string_view error, std::int64_t nowMs);
+    Status reconcileDelivery(std::int64_t id, std::int64_t nowMs);
+    std::vector<Delivery> pendingDeliveries(std::size_t limit = 100) const;
+    std::vector<Delivery> reconcilingDeliveries(std::size_t limit = 100) const;
 
   private:
     struct Impl;
